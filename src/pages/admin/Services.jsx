@@ -1,77 +1,180 @@
-import React, { useState } from 'react';
-import { Plus, Edit3, Trash2, Clock, DollarSign, X, Check, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Edit3, Trash2, Clock, DollarSign, X, Check, Save, Loader2 } from 'lucide-react';
+import { supabase } from '../../supabase/client';
 
 export default function Services() {
   
-  // 1. Mock Data as State
-  const [services, setServices] = useState([
-    { id: 1, name: "Classic Haircut", price: "450", duration: "45", category: "Hair", image: "https://images.unsplash.com/photo-1593702295094-aea8c5c13d99?q=80&w=1974&auto=format&fit=crop" },
-    { id: 2, name: "Hot Towel Shave", price: "350", duration: "30", category: "Shave", image: "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?q=80&w=2070&auto=format&fit=crop" },
-    { id: 3, name: "Hair Coloring", price: "1200", duration: "120", category: "Color", image: "https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=1974&auto=format&fit=crop" },
-    { id: 4, name: "Full Grooming", price: "800", duration: "90", category: "Set", image: "https://images.unsplash.com/photo-1503951914205-b27cfca5639e?q=80&w=2070&auto=format&fit=crop" },
-  ]);
+  // 1. State สำหรับข้อมูล services จาก Supabase
+  const [services, setServices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // 2. Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentService, setCurrentService] = useState(null); // ถ้าเป็น null คือโหมด Add, ถ้ามีค่าคือโหมด Edit
+  const [saving, setSaving] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
     name: '',
     price: '',
-    duration: '',
+    duration_minutes: '',
     category: '',
-    image: ''
+    img_url: '',
+    description: '',
+    rating: 4.5,
+    reviews: 0
   });
+
+  // 3. ดึงข้อมูล services จาก Supabase
+  useEffect(() => {
+    const fetchServices = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from('services')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        setServices(data || []);
+      } catch (err) {
+        setError(err.message);
+        console.error('Error fetching services:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchServices();
+  }, []);
 
   // --- Handlers ---
 
   // เปิด Modal สำหรับเพิ่มบริการใหม่
   const handleAddNew = () => {
     setCurrentService(null);
-    setFormData({ name: '', price: '', duration: '', category: '', image: '' });
+    setFormData({
+      name: '',
+      price: '',
+      duration_minutes: '',
+      category: '',
+      img_url: '',
+      description: '',
+      rating: 4.5,
+      reviews: 0
+    });
     setIsModalOpen(true);
   };
 
   // เปิด Modal สำหรับแก้ไข
   const handleEdit = (service) => {
     setCurrentService(service);
-    setFormData(service);
+    setFormData({
+      name: service.name || '',
+      price: service.price || '',
+      duration_minutes: service.duration_minutes || '',
+      category: service.category || '',
+      img_url: service.img_url || '',
+      description: service.description || '',
+      rating: service.rating || 4.5,
+      reviews: service.reviews || 0
+    });
     setIsModalOpen(true);
   };
 
   // ลบบริการ
-  const handleDelete = (id) => {
-    if (window.confirm("คุณต้องการลบบริการนี้ใช่หรือไม่?")) {
+  const handleDelete = async (id) => {
+    if (!window.confirm("คุณต้องการลบบริการนี้ใช่หรือไม่?")) return;
+
+    try {
+      const { error } = await supabase
+        .from('services')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
       setServices(services.filter(s => s.id !== id));
+      alert("ลบบริการเรียบร้อยแล้ว");
+    } catch (err) {
+      alert('Error deleting service: ' + err.message);
+      console.error('Error deleting service:', err);
     }
   };
 
   // บันทึกข้อมูล (ทั้ง Add และ Edit)
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation ง่ายๆ
+    // Validation
     if (!formData.name || !formData.price) {
         alert("กรุณากรอกชื่อและราคา");
         return;
     }
 
-    if (currentService) {
-      // Logic แก้ไข (Update)
-      setServices(services.map(s => (s.id === currentService.id ? { ...formData, id: s.id } : s)));
-      alert("แก้ไขข้อมูลเรียบร้อย");
-    } else {
-      // Logic เพิ่มใหม่ (Create)
-      const newService = {
-        ...formData,
-        id: Date.now(), // สร้าง ID ชั่วคราว
-        image: formData.image || "https://placehold.co/400x300?text=No+Image" // รูป Default ถ้าไม่ใส่
+    setSaving(true);
+    try {
+      const serviceData = {
+        name: formData.name,
+        price: Number(formData.price),
+        duration_minutes: Number(formData.duration_minutes) || null,
+        category: formData.category || null,
+        img_url: formData.img_url || null,
+        description: formData.description || null,
+        rating: Number(formData.rating) || null,
+        reviews: Number(formData.reviews) || null
       };
-      setServices([newService, ...services]);
-      alert("เพิ่มบริการใหม่เรียบร้อย");
+
+      if (currentService) {
+        // Update
+        const { data, error } = await supabase
+          .from('services')
+          .update(serviceData)
+          .eq('id', currentService.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setServices(services.map(s => s.id === currentService.id ? data : s));
+        alert("แก้ไขข้อมูลเรียบร้อย");
+      } else {
+        // Insert
+        const { data, error } = await supabase
+          .from('services')
+          .insert([serviceData])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        setServices([data, ...services]);
+        alert("เพิ่มบริการใหม่เรียบร้อย");
+      }
+
+      setIsModalOpen(false);
+      setFormData({
+        name: '',
+        price: '',
+        duration_minutes: '',
+        category: '',
+        img_url: '',
+        description: '',
+        rating: 4.5,
+        reviews: 0
+      });
+    } catch (err) {
+      console.error('Error saving service:', err);
+      if (err.message?.includes('row-level security')) {
+        alert('❌ ข้อผิดพลาด RLS Policy:\nไม่สามารถบันทึกข้อมูลได้ เนื่องจากการตั้งค่า Row-Level Security ใน Supabase\n\n✅ วิธีแก้:\n1. ไปที่ Supabase Dashboard\n2. เลือกตาราง "services"\n3. ไปที่ RLS Policies\n4. ปิด RLS หรือสร้าง policy ที่อนุญาต INSERT/UPDATE');
+      } else {
+        alert('Error saving service: ' + err.message);
+      }
+    } finally {
+      setSaving(false);
     }
-    setIsModalOpen(false);
   };
 
   return (
@@ -91,41 +194,65 @@ export default function Services() {
         </button>
       </div>
 
+      {/* Loading State */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+          <span className="ml-3 text-zinc-400">กำลังโหลดข้อมูล...</span>
+        </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-500">
+          <p>เกิดข้อผิดพลาด: {error}</p>
+        </div>
+      )}
+
       {/* Services Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {services.map((service) => (
-          <div key={service.id} className="bg-zinc-900 border border-white/5 rounded-2xl overflow-hidden group hover:border-amber-500/30 transition-all shadow-lg flex flex-col">
-             <div className="h-48 overflow-hidden relative bg-zinc-800">
-                <img src={service.image} alt={service.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-white border border-white/10">
-                   {service.category}
-                </div>
-             </div>
-             <div className="p-5 flex-1 flex flex-col">
-                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-amber-500 transition-colors">{service.name}</h3>
-                <div className="flex justify-between items-center text-sm text-zinc-400 mb-4">
-                   <span className="flex items-center gap-1"><Clock size={14} className="text-amber-500"/> {service.duration} นาที</span>
-                   <span className="flex items-center gap-1 font-num text-white font-bold"><DollarSign size={14} className="text-green-500"/> {service.price}</span>
-                </div>
-                
-                <div className="flex gap-2 pt-4 border-t border-white/5 mt-auto">
-                   <button 
-                     onClick={() => handleEdit(service)}
-                     className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-                   >
-                      <Edit3 size={14} /> แก้ไข
-                   </button>
-                   <button 
-                     onClick={() => handleDelete(service.id)}
-                     className="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
-                   >
-                      <Trash2 size={14} /> ลบ
-                   </button>
-                </div>
-             </div>
-          </div>
-        ))}
-      </div>
+      {!loading && !error && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {services.length > 0 ? (
+            services.map((service) => (
+              <div key={service.id} className="bg-zinc-900 border border-white/5 rounded-2xl overflow-hidden group hover:border-amber-500/30 transition-all shadow-lg flex flex-col">
+                 <div className="h-48 overflow-hidden relative bg-zinc-800">
+                    <img src={service.img_url} alt={service.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs font-bold text-white border border-white/10">
+                       {service.category}
+                    </div>
+                 </div>
+                 <div className="p-5 flex-1 flex flex-col">
+                    <h3 className="text-lg font-bold text-white mb-2 group-hover:text-amber-500 transition-colors">{service.name}</h3>
+                    <div className="flex justify-between items-center text-sm text-zinc-400 mb-4">
+                       <span className="flex items-center gap-1"><Clock size={14} className="text-amber-500"/> {service.duration_minutes} นาที</span>
+                       <span className="flex items-center gap-1 font-num text-white font-bold"><DollarSign size={14} className="text-green-500"/> {service.price}</span>
+                    </div>
+                    
+                    <div className="flex gap-2 pt-4 border-t border-white/5 mt-auto">
+                       <button 
+                         onClick={() => handleEdit(service)}
+                         className="flex-1 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                       >
+                          <Edit3 size={14} /> แก้ไข
+                       </button>
+                       <button 
+                         onClick={() => handleDelete(service.id)}
+                         className="flex-1 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors"
+                       >
+                          <Trash2 size={14} /> ลบ
+                       </button>
+                    </div>
+                 </div>
+              </div>
+            ))
+          ) : (
+            <div className="col-span-full text-center py-20 text-zinc-500">
+              <p>ยังไม่มีรายการบริการ</p>
+              <p className="text-sm mt-2">กดปุ่ม "เพิ่มบริการใหม่" เพื่อเพิ่มรายการแรก</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* --- ADD / EDIT MODAL --- */}
       {isModalOpen && (
@@ -171,12 +298,22 @@ export default function Services() {
                             <input 
                                 type="number" 
                                 required
-                                value={formData.duration}
-                                onChange={e => setFormData({...formData, duration: e.target.value})}
+                                value={formData.duration_minutes}
+                                onChange={e => setFormData({...formData, duration_minutes: e.target.value})}
                                 placeholder="30"
                                 className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none font-num"
                             />
                         </div>
+                    </div>
+                    <div>
+                        <label className="text-sm text-zinc-400 mb-1 block">คำอธิบาย</label>
+                        <textarea 
+                            value={formData.description}
+                            onChange={e => setFormData({...formData, description: e.target.value})}
+                            placeholder="อธิบายรายละเอียดบริการ..."
+                            rows="3"
+                            className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none resize-none"
+                        />
                     </div>
                     <div>
                         <label className="text-sm text-zinc-400 mb-1 block">หมวดหมู่</label>
@@ -197,16 +334,42 @@ export default function Services() {
                         <label className="text-sm text-zinc-400 mb-1 block">URL รูปภาพ</label>
                         <input 
                             type="text" 
-                            value={formData.image}
-                            onChange={e => setFormData({...formData, image: e.target.value})}
+                            value={formData.img_url}
+                            onChange={e => setFormData({...formData, img_url: e.target.value})}
                             placeholder="https://example.com/image.jpg"
                             className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none text-xs"
                         />
-                        {formData.image && (
+                        {formData.img_url && (
                             <div className="mt-2 h-32 rounded-lg overflow-hidden border border-white/10">
-                                <img src={formData.image} alt="Preview" className="w-full h-full object-cover" />
+                                <img src={formData.img_url} alt="Preview" className="w-full h-full object-cover" />
                             </div>
                         )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-sm text-zinc-400 mb-1 block">คะแนน (0-5)</label>
+                            <input 
+                                type="number" 
+                                step="0.1"
+                                min="0"
+                                max="5"
+                                value={formData.rating}
+                                onChange={e => setFormData({...formData, rating: e.target.value})}
+                                placeholder="4.5"
+                                className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none font-num"
+                            />
+                        </div>
+                        <div>
+                            <label className="text-sm text-zinc-400 mb-1 block">จำนวนรีวิว</label>
+                            <input 
+                                type="number" 
+                                min="0"
+                                value={formData.reviews}
+                                onChange={e => setFormData({...formData, reviews: e.target.value})}
+                                placeholder="0"
+                                className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none font-num"
+                            />
+                        </div>
                     </div>
 
                     <div className="pt-4 flex gap-3">
@@ -219,9 +382,18 @@ export default function Services() {
                         </button>
                         <button 
                             type="submit"
-                            className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-black rounded-xl font-bold transition-colors shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                            disabled={saving}
+                            className="flex-1 py-3 bg-amber-500 hover:bg-amber-400 text-black rounded-xl font-bold transition-colors shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
-                            <Save size={18} /> บันทึกข้อมูล
+                            {saving ? (
+                                <>
+                                    <Loader2 size={18} className="animate-spin" /> กำลังบันทึก...
+                                </>
+                            ) : (
+                                <>
+                                    <Save size={18} /> บันทึกข้อมูล
+                                </>
+                            )}
                         </button>
                     </div>
                 </form>

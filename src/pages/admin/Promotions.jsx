@@ -1,17 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tag, Plus, Calendar, Percent, ToggleRight, ToggleLeft, Edit3, Trash2, X, Save, Check } from 'lucide-react';
+import { supabase } from '../../supabase/client';
 
 export default function Promotions() {
-  
-  // 1. Mock Data as State
-  const [promotions, setPromotions] = useState([
-    { id: 1, title: "Father & Son", discount: "แพ็คเกจ 700 บาท", code: "FAMILY", active: true, expire: "2024-12-31" },
-    { id: 2, title: "Happy Hour (13:00-16:00)", discount: "ลด 15%", code: "HAPPY15", active: true, expire: "No Expiry" },
-    { id: 3, title: "Student Discount", discount: "ตัดผม 300 บาท", code: "STUDENT", active: true, expire: "No Expiry" },
-    { id: 4, title: "New Year Special", discount: "ลด 20% ทุกรายการ", code: "NY2025", active: false, expire: "2025-01-31" },
-  ]);
+  const [promotions, setPromotions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // 2. Modal State
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPromo, setCurrentPromo] = useState(null); // null = Add, object = Edit
 
@@ -19,23 +15,52 @@ export default function Promotions() {
   const [formData, setFormData] = useState({
     title: '',
     code: '',
-    discount: '',
-    expire: ''
+    discount_text: '',
+    expire_date: '',
+    active: true,
   });
 
-  // --- Handlers ---
+  useEffect(() => {
+    const fetchPromotions = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .from('promotions')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (error) throw error;
+        setPromotions(data || []);
+      } catch (err) {
+        setError(err.message);
+        console.error('Error fetching promotions:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPromotions();
+  }, []);
 
   // Toggle Active Status
-  const handleToggleActive = (id) => {
-    setPromotions(promotions.map(p => 
-      p.id === id ? { ...p, active: !p.active } : p
-    ));
+  const handleToggleActive = async (id, active) => {
+    try {
+      const { data, error } = await supabase
+        .from('promotions')
+        .update({ active: !active })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      setPromotions((prev) => prev.map(p => p.id === id ? data : p));
+    } catch (err) {
+      alert('ไม่สามารถเปลี่ยนสถานะได้: ' + err.message);
+    }
   };
 
   // Open Modal for Add
   const handleAddNew = () => {
     setCurrentPromo(null);
-    setFormData({ title: '', code: '', discount: '', expire: '' });
+    setFormData({ title: '', code: '', discount_text: '', expire_date: '', active: true });
     setIsModalOpen(true);
   };
 
@@ -43,51 +68,77 @@ export default function Promotions() {
   const handleEdit = (promo) => {
     setCurrentPromo(promo);
     setFormData({
-      title: promo.title,
-      code: promo.code,
-      discount: promo.discount,
-      expire: promo.expire === "No Expiry" ? "" : promo.expire
+      title: promo.title || '',
+      code: promo.code || '',
+      discount_text: promo.discount_text || '',
+      expire_date: promo.expire_date || '',
+      active: promo.active ?? true,
     });
     setIsModalOpen(true);
   };
 
   // Delete Promotion
-  const handleDelete = (id) => {
-    if (window.confirm("คุณต้องการลบโปรโมชั่นนี้ใช่หรือไม่?")) {
+  const handleDelete = async (id) => {
+    if (!window.confirm("คุณต้องการลบโปรโมชั่นนี้ใช่หรือไม่?")) return;
+    try {
+      const { error } = await supabase.from('promotions').delete().eq('id', id);
+      if (error) throw error;
       setPromotions(promotions.filter(p => p.id !== id));
+    } catch (err) {
+      alert('ลบโปรโมชั่นไม่สำเร็จ: ' + err.message);
     }
   };
 
   // Save Data (Add or Update)
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.code || !formData.discount) {
+    if (!formData.title || !formData.code || !formData.discount_text) {
         alert("กรุณากรอกข้อมูลให้ครบถ้วน");
         return;
     }
 
-    const expireDisplay = formData.expire || "No Expiry";
-
-    if (currentPromo) {
-        // Update Logic
-        setPromotions(promotions.map(p => 
-            p.id === currentPromo.id 
-            ? { ...p, ...formData, expire: expireDisplay } 
-            : p
-        ));
+    try {
+      if (currentPromo) {
+        const { data, error } = await supabase
+          .from('promotions')
+          .update({
+            title: formData.title,
+            code: formData.code.toUpperCase(),
+            discount_text: formData.discount_text,
+            expire_date: formData.expire_date || null,
+            active: formData.active,
+          })
+          .eq('id', currentPromo.id)
+          .select()
+          .single();
+        if (error) throw error;
+        setPromotions(promotions.map(p => p.id === currentPromo.id ? data : p));
         alert("แก้ไขโปรโมชั่นเรียบร้อย");
-    } else {
-        // Add Logic
-        const newPromo = {
-            id: Date.now(),
-            ...formData,
-            expire: expireDisplay,
-            active: true // New promo default active
-        };
-        setPromotions([newPromo, ...promotions]);
+      } else {
+        const { data, error } = await supabase
+          .from('promotions')
+          .insert([{
+            title: formData.title,
+            code: formData.code.toUpperCase(),
+            discount_text: formData.discount_text,
+            expire_date: formData.expire_date || null,
+            active: formData.active,
+          }])
+          .select()
+          .single();
+        if (error) throw error;
+        setPromotions([data, ...promotions]);
         alert("สร้างโปรโมชั่นใหม่เรียบร้อย");
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error('Error saving promotion:', err);
+      if (err.message?.includes('row-level security') || err.message?.includes('relation')) {
+        alert('❌ ข้อผิดพลาด:\nโปรดรันคำสั่ง SQL ใน Supabase:\n\n✅ CREATE_PROMOTIONS_TABLE.sql\n\nแล้วรีเฟรชหน้า');
+      } else {
+        alert('บันทึกโปรโมชั่นไม่สำเร็จ: ' + err.message);
+      }
     }
-    setIsModalOpen(false);
   };
 
   return (
@@ -107,9 +158,18 @@ export default function Promotions() {
         </button>
       </div>
 
+      {/* Error */}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl p-4">
+          โหลดโปรโมชั่นไม่สำเร็จ: {error}
+        </div>
+      )}
+
       {/* Promotions Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-         {promotions.map((promo) => (
+         {loading ? (
+          <div className="col-span-full text-center text-zinc-500 py-10">กำลังโหลด...</div>
+         ) : promotions.map((promo) => (
             <div key={promo.id} className={`p-6 rounded-2xl border transition-all flex flex-col sm:flex-row justify-between gap-6 group relative overflow-hidden ${promo.active ? 'bg-zinc-900 border-amber-500/30 shadow-lg' : 'bg-zinc-950 border-white/5 opacity-70'}`}>
                
                {/* Background Glow for Active */}
@@ -124,8 +184,8 @@ export default function Promotions() {
                   </div>
                   <h3 className={`text-xl font-bold mb-1 ${promo.active ? 'text-white' : 'text-zinc-500'}`}>{promo.title}</h3>
                   <div className="flex items-center gap-4 text-sm text-zinc-400 mt-3">
-                     <span className={`flex items-center gap-1 font-bold ${promo.active ? 'text-green-400' : 'text-zinc-500'}`}><Percent size={14}/> {promo.discount}</span>
-                     <span className="flex items-center gap-1 font-num"><Calendar size={14}/> หมดเขต: {promo.expire}</span>
+                     <span className={`flex items-center gap-1 font-bold ${promo.active ? 'text-green-400' : 'text-zinc-500'}`}><Percent size={14}/> {promo.discount_text}</span>
+                     <span className="flex items-center gap-1 font-num"><Calendar size={14}/> หมดเขต: {promo.expire_date || 'No Expiry'}</span>
                   </div>
                </div>
                
@@ -133,7 +193,7 @@ export default function Promotions() {
                   
                   {/* Toggle Switch */}
                   <button 
-                    onClick={() => handleToggleActive(promo.id)}
+                    onClick={() => handleToggleActive(promo.id, promo.active)}
                     title={promo.active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                     className={`text-3xl transition-transform hover:scale-110 active:scale-95 ${promo.active ? 'text-green-500 hover:text-green-400' : 'text-zinc-600 hover:text-zinc-500'}`}
                   >
@@ -208,8 +268,8 @@ export default function Promotions() {
                             <input 
                                 type="text" 
                                 required
-                                value={formData.discount}
-                                onChange={e => setFormData({...formData, discount: e.target.value})}
+                                value={formData.discount_text}
+                                onChange={e => setFormData({...formData, discount_text: e.target.value})}
                                 placeholder="ลด 50% / ลด 100 บาท"
                                 className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none transition-colors"
                             />
@@ -219,8 +279,8 @@ export default function Promotions() {
                         <label className="text-sm text-zinc-400 mb-1 block">วันหมดอายุ (ว่างไว้ = ไม่มีวันหมดอายุ)</label>
                         <input 
                             type="date" 
-                            value={formData.expire}
-                            onChange={e => setFormData({...formData, expire: e.target.value})}
+                            value={formData.expire_date}
+                            onChange={e => setFormData({...formData, expire_date: e.target.value})}
                             className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none transition-colors"
                         />
                     </div>
