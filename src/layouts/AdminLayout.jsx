@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom';
+import { AuthContext } from '../context/AuthContext';
 import { 
   LayoutDashboard, CalendarDays, Scissors, Users, 
   Ticket, LogOut, Menu, X, Settings 
@@ -8,11 +9,17 @@ import {
 export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
+  const { logout, isAdmin } = useContext(AuthContext);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if(window.confirm("ต้องการออกจากระบบแอดมิน?")) {
-        localStorage.removeItem("admin_token");
-        navigate("/login");
+        try {
+          await logout();
+          navigate("/login");
+        } catch (err) {
+          console.error('Error logging out:', err);
+          alert('ไม่สามารถออกจากระบบได้');
+        }
     }
   };
 

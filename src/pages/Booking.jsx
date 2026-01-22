@@ -1,130 +1,206 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Search, SlidersHorizontal, Star, Clock, 
+import { supabase } from '../supabase/client';
+import { AuthContext } from '../context/AuthContext';
+import {
+  Search, SlidersHorizontal, Star, Clock,
   Sparkles, X, ChevronRight,
-  User, Calendar, QrCode, MessageCircle, ArrowLeft
+  User, Calendar, CheckCircle, MessageCircle, ArrowLeft, AlertCircle, XCircle
 } from 'lucide-react';
 
 export default function Booking() {
   const navigate = useNavigate();
+  const { user } = useContext(AuthContext);
+
+  console.log('🔍 Booking component rendered, user:', user?.id);
 
   // --- State Management ---
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState(null);
   const [sortBy, setSortBy] = useState('recommended');
   const [searchQuery, setSearchQuery] = useState('');
-  
+
+  // Data states
+  const [packages, setPackages] = useState([]);
+  const [promotions, setPromotions] = useState([]);
+  const [selectedPromotion, setSelectedPromotion] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // State สำหรับการจอง (Booking Modal)
   const [bookingStep, setBookingStep] = useState('select'); // 'select' | 'confirm' | 'success'
+  const [bookingInProgress, setBookingInProgress] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
   const [bookingData, setBookingData] = useState({
     date: '',
     time: '',
     name: '',
     tel: ''
   });
+  const [bookedSlots, setBookedSlots] = useState([]);
 
-  // --- Data Mockup ---
-  const packages = [
-    {
-      id: 1,
-      name: 'Classic Gentleman Cut',
-      badge: 'Bestseller',
-      badgeColor: 'bg-rose-500',
-      price: 450,
-      originalPrice: null,
-      duration: 45,
-      includes: ['ตัดผม', 'เซ็ตทรง', 'สระผม'],
-      category: 'ตัด',
-      rating: 4.9,
-      reviews: 128,
-      img: 'https://images.unsplash.com/photo-1593702295094-aea8c5c13d99?q=80&w=1974&auto=format&fit=crop',
-      desc: 'ทรงผมคลาสสิกที่เหนือกาลเวลา เหมาะสำหรับสุภาพบุรุษที่ต้องการความเนี๊ยบ เรียบหรู ดูดีทุกสถานการณ์'
-    },
-    {
-      id: 2,
-      name: 'Fade Master & Beard Trim',
-      badge: 'Recommended',
-      badgeColor: 'bg-amber-500',
-      price: 600,
-      originalPrice: 700,
-      duration: 60,
-      includes: ['ตัดเฟด', 'โกนหนวด', 'ผ้าร้อน'],
-      category: 'ครบวงจร',
-      rating: 4.8,
-      reviews: 86,
-      img: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=2070&auto=format&fit=crop',
-      desc: 'ที่สุดของความคมเข้ม ด้วยเทคนิคการไล่เฟดระดับสูง พร้อมบริการดูแลหนวดเคราแบบครบสูตร'
-    },
-    {
-      id: 3,
-      name: 'Korean Style Perm',
-      badge: 'Trending',
-      badgeColor: 'bg-purple-500',
-      price: 2500,
-      originalPrice: 3000,
-      duration: 180,
-      includes: ['ตัดแต่ง', 'ดัดวอลลุ่ม', 'บำรุง'],
-      category: 'เคมี',
-      rating: 4.7,
-      reviews: 42,
-      img: 'https://images.unsplash.com/photo-1562004723-602d3858c8e9?q=80&w=1974&auto=format&fit=crop',
-      desc: 'เปลี่ยนลุคให้ดูอบอุ่น มีสไตล์ ด้วยการดัดวอลลุ่มสไตล์เกาหลี ผมดูหนานุ่ม มีมิติ เป็นธรรมชาติ'
-    },
-    {
-        id: 4,
-        name: 'Executive Grooming',
-        badge: 'Premium',
-        badgeColor: 'bg-emerald-500',
-        price: 1200,
-        originalPrice: null,
-        duration: 90,
-        includes: ['ตัดผม', 'โกนหนวด', 'สปาหน้า', 'นวดไหล่'],
-        category: 'สปา',
-        rating: 5.0,
-        reviews: 35,
-        img: 'https://images.unsplash.com/photo-1503951914205-b27cfca5639e?q=80&w=2070&auto=format&fit=crop',
-        desc: 'ประสบการณ์การพักผ่อนที่เหนือระดับ ดูแลครบทั้งผม หน้า และการผ่อนคลาย เพื่อภาพลักษณ์ที่ดีที่สุด'
-      },
-      {
-        id: 5,
-        name: 'Kids Cool Cut',
-        badge: 'Popular',
-        badgeColor: 'bg-blue-500',
-        price: 300,
-        originalPrice: null,
-        duration: 30,
-        includes: ['ตัดผมเด็ก', 'ของเล่น', 'ขนม'],
-        category: 'ตัด',
-        rating: 4.8,
-        reviews: 64,
-        img: 'https://images.unsplash.com/photo-1519340241574-2cec6aef0c01?q=80&w=2066&auto=format&fit=crop',
-        desc: 'บริการตัดผมสำหรับหนูน้อย ด้วยช่างใจดีและเทคนิคพิเศษที่ทำให้เด็กๆ เพลิดเพลิน สนุกกับการตัดผม'
-      },
-      {
-        id: 6,
-        name: 'Hair Coloring',
-        badge: 'New',
-        badgeColor: 'bg-indigo-500',
-        price: 1500,
-        originalPrice: 1800,
-        duration: 120,
-        includes: ['ทำสีผม', 'ทรีทเม้นท์', 'เซ็ตทรง'],
-        category: 'เคมี',
-        rating: 4.6,
-        reviews: 28,
-        img: 'https://images.unsplash.com/photo-1560066984-138dadb4c035?q=80&w=1974&auto=format&fit=crop',
-        desc: 'สร้างสรรค์สีผมใหม่ให้โดดเด่น สะท้อนตัวตนของคุณ ด้วยผลิตภัณฑ์คุณภาพสูง ถนอมเส้นผม'
+  // Fetch booked slots for the selected date
+  useEffect(() => {
+    if (bookingData.date) {
+      const fetchBookedSlots = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('bookings')
+            .select('booking_time')
+            .eq('booking_date', bookingData.date)
+            .neq('status', 'Cancelled');
+
+          if (error) throw error;
+          setBookedSlots(data.map(b => b.booking_time));
+        } catch (err) {
+          console.error('Error fetching booked slots:', err);
+        }
+      };
+      fetchBookedSlots();
+    }
+  }, [bookingData.date]);
+
+  // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 30 นาที)
+  const timeSlots = useMemo(() => {
+    const slots = [];
+    for (let hour = 9; hour <= 20; hour++) {
+      const hStr = hour.toString().padStart(2, '0');
+      slots.push(`${hStr}:00`);
+      if (hour < 20) {
+        slots.push(`${hStr}:30`);
       }
-  ];
+    }
+    return slots;
+  }, []);
+
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
+
+  const showNotification = (message, type = 'info') => {
+    setNotification({ show: true, message, type });
+    if (type === 'success') {
+      setTimeout(() => setNotification(prev => ({ ...prev, show: false })), 3000);
+    }
+  };
+
+  // --- Data Fetching ---
+  // Helper function to fetch services
+  const fetchServices = async () => {
+    console.log('🔄 Starting fetchServices...');
+    setLoading(true);
+    setError(null);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+    try {
+      console.log('📡 Fetching services from Supabase...');
+      const { data, error } = await supabase
+        .from('services')
+        .select('*');
+
+      clearTimeout(timeoutId);
+
+      if (error) {
+        console.error('❌ Services fetch error:', error);
+        setError('Failed to load services: ' + error.message);
+        setLoading(false);
+        return;
+      }
+
+      if (!data) {
+        console.error('❌ No data returned');
+        setError('No data returned from server');
+        setLoading(false);
+        return;
+      }
+
+      console.log('✅ Services fetched:', data.length, 'items');
+      console.log('First item:', data[0]);
+
+      const mappedData = data.map(service => ({
+        ...service,
+        duration: service.duration_minutes,
+        img: service.img_url,
+        desc: service.description,
+        includes: service.description?.split(', ') || []
+      }));
+
+      setPackages(mappedData);
+      console.log('✅ Packages state updated with', mappedData.length, 'items');
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.error("❌ Error fetching services:", err);
+      setError(err.message || 'Failed to fetch services');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch services and promotions on component mount
+  useEffect(() => {
+    console.log('📌 useEffect mounted (empty dependency)');
+    const fetchInitialData = async () => {
+      setLoading(true);
+      await Promise.all([
+        fetchServices(),
+        fetchPromotions()
+      ]);
+      setLoading(false);
+    };
+
+    fetchInitialData();
+  }, []);
+
+  const fetchPromotions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('promotions')
+        .select('*')
+        .eq('active', true)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPromotions(data || []);
+      console.log('✅ Promotions fetched:', data?.length);
+    } catch (err) {
+      console.error('Error fetching promotions:', err);
+    }
+  };
+
+  // ดึง user profile เมื่อ user เปลี่ยน
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user) {
+        setUserProfile(null);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('full_name, phone, line_user_id')
+          .eq('id', user.id)
+          .single();
+
+        if (error && error.code !== 'PGRST116') {
+          console.error('Error fetching profile:', error);
+        } else if (data) {
+          setUserProfile(data);
+        }
+      } catch (err) {
+        console.error('Error fetching user profile:', err);
+      }
+    };
+
+    fetchUserProfile();
+  }, [user]);
 
   // --- Functions ---
-  
+
   // กรองและเรียงลำดับข้อมูล
   const filteredPackages = packages
-    .filter(pkg => 
-      pkg.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      pkg.desc.toLowerCase().includes(searchQuery.toLowerCase())
+    .filter(pkg =>
+      pkg.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (pkg.desc && pkg.desc.toLowerCase().includes(searchQuery.toLowerCase()))
     )
     .sort((a, b) => {
       if (sortBy === 'price_asc') return a.price - b.price;
@@ -135,14 +211,19 @@ export default function Booking() {
 
   // เปิด Modal เพื่อเริ่มการจอง
   const handleOpenBooking = (pkg) => {
-    // เช็ค Login ก่อน
-    const token = sessionStorage.getItem("token") || localStorage.getItem("token");
-    if (!token) {
-        if (window.confirm("คุณต้องเข้าสู่ระบบก่อนทำการจองคิว ต้องการไปหน้าเข้าสู่ระบบหรือไม่?")) {
-            navigate("/login");
-        }
-        return;
+    if (!user) {
+      navigate("/login?redirect=booking");
+      return;
     }
+
+    const today = new Date().toLocaleDateString('en-CA');
+    // Pre-fill booking data with user's profile info from profiles table
+    setBookingData({
+      date: today,
+      time: '',
+      name: userProfile?.full_name || user.user_metadata?.name || '',
+      tel: userProfile?.phone || user.user_metadata?.phone || ''
+    });
 
     setSelectedPackage(pkg);
     setBookingStep('select');
@@ -151,23 +232,116 @@ export default function Booking() {
   // ปิด Modal ทั้งหมด
   const closeAll = () => {
     setSelectedPackage(null);
+    setSelectedPromotion(null);
     setBookingStep('select');
     setBookingData({ date: '', time: '', name: '', tel: '' });
   };
 
-  // ยืนยันการจอง (จำลองการส่งข้อมูล)
-  const confirmBooking = () => {
-     if(!bookingData.date || !bookingData.time) {
-         alert("กรุณาระบุวันและเวลาที่ต้องการจอง");
-         return;
-     }
-     setBookingStep('success');
+  // คำนวณราคาสุทธิ
+  const finalPrice = useMemo(() => {
+    if (!selectedPackage) return 0;
+    if (!selectedPromotion) return selectedPackage.price;
+
+    const discountText = selectedPromotion.discount_text || '';
+    let discount = 0;
+
+    if (discountText.includes('%')) {
+      const percent = parseInt(discountText.replace(/[^0-9]/g, ''));
+      discount = (selectedPackage.price * percent) / 100;
+    } else {
+      discount = parseInt(discountText.replace(/[^0-9]/g, ''));
+    }
+
+    return Math.max(0, selectedPackage.price - discount);
+  }, [selectedPackage, selectedPromotion]);
+
+  // ยืนยันการจอง
+  const confirmBooking = async () => {
+    if (!bookingData.date || !bookingData.time) {
+      showNotification("กรุณาระบุวันและเวลาที่ต้องการจอง", "warning");
+      return;
+    }
+
+    if (!userProfile?.line_user_id) {
+      showNotification("คุณยังไม่ได้เชื่อมต่อบัญชีกับ LINE เพื่อรับการแจ้งเตือนคิว ระบบจะพาคุณไปเชื่อมต่อในหน้าโปรไฟล์ก่อนครับ", "warning");
+      setTimeout(() => navigate("/profile?notice=link_line"), 2000);
+      return;
+    }
+    setBookingInProgress(true);
+    try {
+      // --- COLLISION CHECK (Double Booking Prevention) ---
+      const { data: existing, error: checkError } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('booking_date', bookingData.date)
+        .eq('booking_time', bookingData.time)
+        .neq('status', 'Cancelled')
+        .maybeSingle();
+
+      if (existing) {
+        showNotification("ขออภัยครับ เวลานี้เพิ่งถูกจองไปเมื่อครู่ กรุณาเลือกเวลาอื่นแทนครับ", "warning");
+        setBookingInProgress(false);
+        // Refresh booked slots list
+        const { data: newData } = await supabase
+          .from('bookings')
+          .select('booking_time')
+          .eq('booking_date', bookingData.date)
+          .neq('status', 'Cancelled');
+        setBookedSlots(newData ? newData.map(b => b.booking_time) : []);
+        return;
+      }
+
+      // 1) บันทึกลง Supabase
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert([
+          {
+            user_id: user.id,
+            customer_name: bookingData.name || userProfile?.full_name || user.user_metadata?.name || '',
+            service_name: selectedPackage.name,
+            barber_name: null, // จะกำหนดช่างภายหลัง
+            booking_date: bookingData.date,
+            booking_time: bookingData.time,
+            price: finalPrice,
+            applied_promo: selectedPromotion?.code || null,
+            status: 'Pending'
+          }
+        ])
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      // 2) แจ้งเตือนไป LINE ผ่าน backend (ทำเป็นเบื้องหลังเพื่อไม่ให้ UI ค้าง)
+      fetch('http://localhost:3001/api/line/notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          booking_id: data.id,
+          customer_name: bookingData.name || userProfile?.full_name || user.user_metadata?.name || '',
+          service_name: data.service_name,
+          booking_date: data.booking_date,
+          booking_time: data.booking_time,
+          price: data.price,
+          status: data.status,
+        }),
+      }).catch(err => console.warn('LINE Notify background error:', err));
+
+      setBookingStep('success');
+    } catch (error) {
+      showNotification('Error creating booking: ' + error.message, "error");
+      console.error('Error creating booking:', error);
+    } finally {
+      setBookingInProgress(false);
+    }
   };
 
   return (
     // เพิ่ม pt-24 เพื่อดันเนื้อหาลงมาให้พ้น Navbar หลัก
     <div className="bg-zinc-950 min-h-screen font-sans text-zinc-100 pb-20 pt-24 selection:bg-amber-500 selection:text-black">
-       <style>{`
+      <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Manrope:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap');
         .font-serif { font-family: 'Playfair Display', serif; }
         .font-sans { font-family: 'Manrope', sans-serif; }
@@ -178,18 +352,18 @@ export default function Booking() {
       {/* เปลี่ยนจาก top-0 เป็น top-20 (ประมาณ 80px) เพื่อให้ Sticky อยู่ใต้ Navbar หลักพอดี */}
       <header className="sticky top-20 z-30 bg-zinc-950/80 backdrop-blur-md border-b border-white/10 px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <button 
-            onClick={() => navigate("/")} 
+          <button
+            onClick={() => navigate("/")}
             className="p-2 rounded-full hover:bg-white/10 transition-colors text-zinc-400 hover:text-white"
           >
             <ArrowLeft className="w-6 h-6" />
           </button>
-          
+
           <h1 className="text-xl font-serif font-bold text-white">
             บริการของเรา
           </h1>
 
-          <button 
+          <button
             className="p-2 rounded-full hover:bg-white/10 transition-colors relative text-zinc-400 hover:text-white"
             onClick={() => setFilterOpen(!filterOpen)}
           >
@@ -200,255 +374,402 @@ export default function Booking() {
 
         {/* Search Bar */}
         <div className="max-w-5xl mx-auto mt-4 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
-            <input 
-              type="text" 
-              placeholder="ค้นหาทรงผม หรือ บริการ..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-zinc-900 border border-white/10 rounded-2xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-amber-500/50 transition-all text-white placeholder:text-zinc-600 font-medium focus:border-amber-500/50 outline-none"
-            />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="ค้นหาทรงผม หรือ บริการ..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-zinc-900 border border-white/10 rounded-2xl py-3 pl-12 pr-4 focus:ring-2 focus:ring-amber-500/50 transition-all text-white placeholder:text-zinc-600 font-medium focus:border-amber-500/50 outline-none"
+          />
         </div>
       </header>
 
       {/* --- FILTER PANEL (Expandable) --- */}
       <div className={`overflow-hidden transition-all duration-300 bg-zinc-900 border-b border-white/5 ${filterOpen ? 'max-h-40 py-4' : 'max-h-0'}`}>
-          <div className="max-w-5xl mx-auto px-6">
-              <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-3">จัดเรียงตาม</p>
-              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                  {[
-                      { id: 'recommended', label: 'แนะนำ' },
-                      { id: 'rating', label: 'คะแนนสูงสุด' },
-                      { id: 'price_asc', label: 'ราคา (ต่ำ-สูง)' },
-                      { id: 'price_desc', label: 'ราคา (สูง-ต่ำ)' },
-                  ].map((opt) => (
-                      <button
-                        key={opt.id}
-                        onClick={() => setSortBy(opt.id)}
-                        className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold border transition-all ${
-                            sortBy === opt.id 
-                            ? 'bg-amber-500 text-black border-amber-500' 
-                            : 'bg-zinc-800 text-zinc-400 border-white/5 hover:border-amber-500/50 hover:text-white'
-                        }`}
-                      >
-                          {opt.label}
-                      </button>
-                  ))}
-              </div>
+        <div className="max-w-5xl mx-auto px-6">
+          <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-3">จัดเรียงตาม</p>
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+            {[
+              { id: 'recommended', label: 'แนะนำ' },
+              { id: 'rating', label: 'คะแนนสูงสุด' },
+              { id: 'price_asc', label: 'ราคา (ต่ำ-สูง)' },
+              { id: 'price_desc', label: 'ราคา (สูง-ต่ำ)' },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => setSortBy(opt.id)}
+                className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold border transition-all ${sortBy === opt.id
+                  ? 'bg-amber-500 text-black border-amber-500'
+                  : 'bg-zinc-800 text-zinc-400 border-white/5 hover:border-amber-500/50 hover:text-white'
+                  }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
+        </div>
       </div>
 
       {/* --- CONTENT GRID --- */}
       <main className="max-w-5xl mx-auto px-6 py-8">
         <div className="flex items-center gap-2 mb-6">
-            <Sparkles className="w-5 h-5 text-amber-500" />
-            <h2 className="text-lg font-bold text-zinc-300">รายการแพ็คเกจ (<span className="font-num">{filteredPackages.length}</span>)</h2>
+          <Sparkles className="w-5 h-5 text-amber-500" />
+          <h2 className="text-lg font-bold text-zinc-300">รายการแพ็คเกจ (<span className="font-num">{filteredPackages.length}</span>)</h2>
         </div>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Loading / Error / Empty states */}
+        {loading && (
+          <div className="text-center py-16 text-zinc-500">
+            กำลังโหลดรายการแพ็คเกจ...
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl p-4">
+            <div className="font-bold mb-1">โหลดรายการแพ็คเกจไม่สำเร็จ</div>
+            <div className="text-sm break-words">{error}</div>
+          </div>
+        )}
+
+        {!loading && !error && packages.length === 0 && (
+          <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 text-zinc-300">
+            <div className="font-bold text-white mb-2">ยังไม่มีรายการแพ็คเกจในระบบ</div>
+            <div className="text-sm text-zinc-400 leading-relaxed">
+              ให้เพิ่มข้อมูลในตาราง <span className="font-mono">services</span> ที่ Supabase ก่อน
+              (เช่น เพิ่มผ่านหน้า <span className="font-mono">/admin/services</span> หรือรันไฟล์ <span className="font-mono">seed-services.sql</span> ใน Supabase SQL Editor)
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => navigate('/admin/services')}
+                className="px-4 py-2 rounded-xl bg-amber-500 text-black font-bold hover:bg-amber-400 transition-colors"
+              >
+                ไปหน้าเพิ่มบริการ
+              </button>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 rounded-xl bg-zinc-800 text-white font-bold hover:bg-zinc-700 transition-colors"
+              >
+                โหลดใหม่
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && packages.length > 0 && (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredPackages.map((pkg) => (
-                <div key={pkg.id} className="bg-zinc-900 rounded-3xl p-4 shadow-xl hover:shadow-amber-500/10 transition-all duration-300 group border border-white/10 flex flex-col h-full hover:border-amber-500/30">
-                    {/* Image Area */}
-                    <div className="relative h-56 rounded-2xl overflow-hidden mb-4 bg-zinc-800">
-                        <img src={pkg.img} alt={pkg.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100" />
-                        <div className="absolute top-3 left-3 flex gap-2">
-                             {pkg.badge && (
-                                 <span className={`${pkg.badgeColor} text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm`}>
-                                     {pkg.badge}
-                                 </span>
-                             )}
-                        </div>
-                        <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1 text-xs font-bold shadow-sm border border-white/10">
-                            <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                            <span className="text-white font-num">{pkg.rating}</span>
-                            <span className="text-zinc-400 font-normal font-num">({pkg.reviews})</span>
-                        </div>
-                    </div>
-
-                    {/* Content Area */}
-                    <div className="flex-grow flex flex-col">
-                        <div className="flex justify-between items-start mb-2">
-                            <div>
-                                <h3 className="font-serif font-bold text-xl text-white leading-tight mb-1 group-hover:text-amber-500 transition-colors">{pkg.name}</h3>
-                                <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium">
-                                    <span className="flex items-center gap-1 text-zinc-400"><Clock className="w-3 h-3 text-amber-500" /> <span className="font-num">{pkg.duration}</span> นาที</span>
-                                    <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
-                                    <span className="text-zinc-400">{pkg.category}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <p className="text-zinc-400 text-sm leading-relaxed mb-4 line-clamp-2">{pkg.desc}</p>
-
-                        <div className="flex flex-wrap gap-2 mb-6">
-                            {pkg.includes.map((item, i) => (
-                                <span key={i} className="text-[10px] font-bold bg-zinc-800 text-zinc-300 px-2 py-1 rounded-md border border-white/5">
-                                    {item}
-                                </span>
-                            ))}
-                        </div>
-
-                        {/* Price & Action */}
-                        <div className="mt-auto flex items-center justify-between pt-4 border-t border-white/5">
-                             <div className="flex flex-col">
-                                 {pkg.originalPrice && <span className="text-xs text-zinc-500 line-through decoration-zinc-600 font-num">฿{pkg.originalPrice}</span>}
-                                 <span className="text-2xl font-bold text-amber-500 font-num">฿{pkg.price}</span>
-                             </div>
-                             <button 
-                               onClick={() => handleOpenBooking(pkg)}
-                               className="bg-white hover:bg-amber-500 hover:text-black text-black px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2 group/btn"
-                             >
-                                 จองเลย <ChevronRight className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" />
-                             </button>
-                        </div>
-                    </div>
+              <div key={pkg.id} className="bg-zinc-900 rounded-3xl p-4 shadow-xl hover:shadow-amber-500/10 transition-all duration-300 group border border-white/10 flex flex-col h-full hover:border-amber-500/30">
+                {/* Image Area */}
+                <div className="relative h-56 rounded-2xl overflow-hidden mb-4 bg-zinc-800">
+                  <img src={pkg.img} alt={pkg.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100" />
+                  <div className="absolute top-3 left-3 flex gap-2">
+                    {pkg.badge && (
+                      <span className={`${pkg.badgeColor} text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm`}>
+                        {pkg.badge}
+                      </span>
+                    )}
+                  </div>
+                  <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1 text-xs font-bold shadow-sm border border-white/10">
+                    <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                    <span className="text-white font-num">{pkg.rating}</span>
+                    <span className="text-zinc-400 font-normal font-num">({pkg.reviews})</span>
+                  </div>
                 </div>
+
+                {/* Content Area */}
+                <div className="flex-grow flex flex-col">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h3 className="font-serif font-bold text-xl text-white leading-tight mb-1 group-hover:text-amber-500 transition-colors">{pkg.name}</h3>
+                      <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium">
+                        <span className="flex items-center gap-1 text-zinc-400"><Clock className="w-3 h-3 text-amber-500" /> <span className="font-num">{pkg.duration}</span> นาที</span>
+                        <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
+                        <span className="text-zinc-400">{pkg.category}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-zinc-400 text-sm leading-relaxed mb-4 line-clamp-2">{pkg.desc}</p>
+
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {pkg.includes.map((item, i) => (
+                      <span key={i} className="text-[10px] font-bold bg-zinc-800 text-zinc-300 px-2 py-1 rounded-md border border-white/5">
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Price & Action */}
+                  <div className="mt-auto flex items-center justify-between pt-4 border-t border-white/5">
+                    <div className="flex flex-col">
+                      {pkg.originalPrice && <span className="text-xs text-zinc-500 line-through decoration-zinc-600 font-num">฿{pkg.originalPrice}</span>}
+                      <span className="text-2xl font-bold text-amber-500 font-num">฿{pkg.price}</span>
+                    </div>
+                    <button
+                      onClick={() => handleOpenBooking(pkg)}
+                      className="bg-white hover:bg-amber-500 hover:text-black text-black px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2 group/btn"
+                    >
+                      จองเลย <ChevronRight className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" />
+                    </button>
+                  </div>
+                </div>
+              </div>
             ))}
-        </div>
+          </div>
+        )}
       </main>
 
 
       {/* --- BOOKING MODAL OVERLAY --- */}
       {selectedPackage && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onClick={closeAll}></div>
-            
-            <div className="bg-zinc-900 w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl z-10 overflow-hidden flex flex-col max-h-[90vh] animate-[slideUp_0.3s_ease-out] border border-white/10">
-                
-                {/* Modal Header */}
-                <div className="p-6 border-b border-white/10 flex items-center justify-between bg-zinc-900 sticky top-0 z-10">
-                    <div>
-                         <span className="text-xs font-bold text-amber-500 uppercase tracking-widest block mb-1">
-                             {bookingStep === 'success' ? 'Booking Confirmed' : 'Booking Details'}
-                         </span>
-                         <h3 className="font-serif font-bold text-xl text-white truncate pr-4">
-                             {bookingStep === 'success' ? 'จองคิวสำเร็จ' : selectedPackage.name}
-                         </h3>
-                    </div>
-                    <button onClick={closeAll} className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity" onClick={closeAll}></div>
 
-                {/* Modal Body */}
-                <div className="overflow-y-auto p-0 bg-zinc-950">
-                    
-                    {/* STEP 1: Select Date & Info */}
-                    {bookingStep === 'select' && (
-                        <div className="p-6 space-y-6">
-                            {/* Package Summary */}
-                            <div className="bg-zinc-900 p-4 rounded-2xl border border-white/10 flex gap-4">
-                                <div className="w-20 h-20 bg-zinc-800 rounded-xl overflow-hidden shrink-0">
-                                    <img src={selectedPackage.img} alt="" className="w-full h-full object-cover" />
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-white">{selectedPackage.name}</h4>
-                                    <div className="flex items-center gap-2 text-xs text-zinc-400 mb-1">
-                                        <Clock className="w-3 h-3 text-amber-500" /> <span className="font-num">{selectedPackage.duration}</span> นาที
-                                    </div>
-                                    <span className="text-amber-500 font-bold font-num">฿{selectedPackage.price}</span>
-                                </div>
-                            </div>
+          <div className="bg-zinc-900 w-full max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl z-10 overflow-hidden flex flex-col max-h-[90vh] animate-[slideUp_0.3s_ease-out] border border-white/10">
 
-                            {/* Date & Time Input */}
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-sm font-bold text-zinc-400 mb-2 block flex items-center gap-2">
-                                        <Calendar className="w-4 h-4 text-amber-500"/> วันที่
-                                    </label>
-                                    <input 
-                                        type="date" 
-                                        value={bookingData.date}
-                                        onChange={(e) => setBookingData({...bookingData, date: e.target.value})}
-                                        className="w-full bg-zinc-800 border border-white/10 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 outline-none text-white scheme-dark font-num" 
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-sm font-bold text-zinc-400 mb-2 block flex items-center gap-2">
-                                        <Clock className="w-4 h-4 text-amber-500"/> เวลา
-                                    </label>
-                                    <input 
-                                        type="time" 
-                                        value={bookingData.time}
-                                        onChange={(e) => setBookingData({...bookingData, time: e.target.value})}
-                                        className="w-full bg-zinc-800 border border-white/10 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 outline-none text-white scheme-dark font-num" 
-                                    />
-                                </div>
-                            </div>
-
-                             {/* User Info */}
-                             <div className="space-y-4 pt-4 border-t border-white/10">
-                                <div>
-                                    <label className="text-sm font-bold text-zinc-400 mb-2 block flex items-center gap-2">
-                                        <User className="w-4 h-4 text-amber-500"/> ชื่อผู้จอง
-                                    </label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="ระบุชื่อของคุณ"
-                                        value={bookingData.name}
-                                        onChange={(e) => setBookingData({...bookingData, name: e.target.value})}
-                                        className="w-full bg-zinc-800 border border-white/10 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 outline-none placeholder:text-zinc-600 text-white" 
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* STEP 2: Success */}
-                    {bookingStep === 'success' && (
-                      <div className="p-8 text-center bg-zinc-950 min-h-[400px] flex flex-col items-center justify-center">
-                          <div className="w-24 h-24 bg-green-500/20 rounded-full flex items-center justify-center mb-6 animate-bounce">
-                              <QrCode className="w-12 h-12 text-green-500" />
-                          </div>
-                          <h4 className="text-2xl font-serif font-bold text-white mb-2">จองคิวเรียบร้อย!</h4>
-                          <p className="text-zinc-400 text-sm mb-8 max-w-xs mx-auto">
-                              ระบบได้รับข้อมูลของคุณแล้ว กรุณาสแกน QR Code ด้านล่างเพื่อยืนยันการจองผ่าน LINE
-                          </p>
-
-                          <div className="bg-white p-6 rounded-2xl border border-white/10 mb-6 w-full max-w-sm">
-                              <div className="flex flex-col items-center gap-4">
-                                  {/* ใช้ QR Placeholder */}
-                                  <img 
-                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=https://line.me/ti/p/~your_line_id`} 
-                                    alt="Line QR Code" 
-                                    className="w-40 h-40 mix-blend-multiply"
-                                  />
-                              </div>
-                              <div className="flex items-center justify-center gap-2 text-green-600 font-bold mt-4">
-                                  <MessageCircle className="w-5 h-5" />
-                                  <span>แอดไลน์เพื่อแจ้งโอนเงิน</span>
-                              </div>
-                          </div>
-                      </div>
-                    )}
-                </div>
-
-                {/* Modal Footer (Action Buttons) */}
-                {bookingStep === 'select' && (
-                    <div className="p-6 border-t border-white/10 bg-zinc-900">
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="text-zinc-400 text-sm">ยอดรวมทั้งสิ้น</span>
-                            <span className="text-2xl font-bold text-amber-500 font-num">฿{selectedPackage.price}</span>
-                        </div>
-                        <button
-                            onClick={confirmBooking}
-                            className="w-full bg-amber-500 text-black py-4 rounded-xl font-bold hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 text-lg"
-                        >
-                            ยืนยันการจอง
-                        </button>
-                    </div>
-                )}
-                 {bookingStep === 'success' && (
-                     <div className="p-6 border-t border-white/10 bg-zinc-900">
-                        <button
-                            onClick={closeAll}
-                            className="w-full bg-zinc-800 text-white py-4 rounded-xl font-bold hover:bg-zinc-700 transition-all"
-                        >
-                            ปิดหน้าต่าง
-                        </button>
-                     </div>
-                 )}
+            {/* Modal Header */}
+            <div className="p-6 border-b border-white/10 flex items-center justify-between bg-zinc-900 sticky top-0 z-10">
+              <div>
+                <span className="text-xs font-bold text-amber-500 uppercase tracking-widest block mb-1">
+                  {bookingStep === 'success' ? 'Booking Confirmed' : 'Booking Details'}
+                </span>
+                <h3 className="font-serif font-bold text-xl text-white truncate pr-4">
+                  {bookingStep === 'success' ? 'จองคิวสำเร็จ' : selectedPackage.name}
+                </h3>
+              </div>
+              <button onClick={closeAll} className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white">
+                <X className="w-5 h-5" />
+              </button>
             </div>
+
+            {/* Modal Body */}
+            <div className="overflow-y-auto p-0 bg-zinc-950">
+
+              {/* STEP 1: Select Date & Info */}
+              {bookingStep === 'select' && (
+                <div className="p-6 space-y-6">
+                  {/* Package Summary */}
+                  <div className="bg-zinc-900 p-4 rounded-2xl border border-white/10 flex gap-4">
+                    <div className="w-20 h-20 bg-zinc-800 rounded-xl overflow-hidden shrink-0">
+                      <img src={selectedPackage.img} alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white">{selectedPackage.name}</h4>
+                      <div className="flex items-center gap-2 text-xs text-zinc-400 mb-1">
+                        <Clock className="w-3 h-3 text-amber-500" /> <span className="font-num">{selectedPackage.duration}</span> นาที
+                      </div>
+                      <span className="text-amber-500 font-bold font-num">฿{selectedPackage.price}</span>
+                    </div>
+                  </div>
+
+                  {/* Date & Time Input */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-bold text-zinc-400 mb-2 block flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-amber-500" /> วันที่
+                      </label>
+                      <input
+                        type="date"
+                        value={bookingData.date}
+                        min={new Date().toLocaleDateString('en-CA')}
+                        onChange={(e) => setBookingData({ ...bookingData, date: e.target.value })}
+                        className="w-full bg-zinc-800 border border-white/10 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 outline-none text-white scheme-dark font-num"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-bold text-zinc-400 mb-3 block flex items-center gap-2">
+                        <Clock className="w-4 h-4 text-amber-500" /> เลือกเวลาที่ต้องการ
+                      </label>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        {timeSlots.map((slot) => {
+                          const isBooked = bookedSlots.some(bTime => bTime && bTime.startsWith(slot));
+                          return (
+                            <button
+                              key={slot}
+                              type="button"
+                              disabled={isBooked}
+                              onClick={() => setBookingData({ ...bookingData, time: slot })}
+                              className={`py-2.5 rounded-xl text-sm font-num font-bold transition-all border ${bookingData.time === slot
+                                ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] scale-105'
+                                : isBooked
+                                  ? 'bg-transparent text-white/5 border-white/5 cursor-not-allowed'
+                                  : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
+                                }`}
+                            >
+                              {slot}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-zinc-500 mt-2">* พักตามรอบการบริการของร้าน</p>
+                    </div>
+                  </div>
+
+                  {/* User Info */}
+                  <div className="space-y-4 pt-4 border-t border-white/10">
+                    <div>
+                      <label className="text-sm font-bold text-zinc-400 mb-2 block flex items-center gap-2">
+                        <User className="w-4 h-4 text-amber-500" /> ชื่อผู้จอง
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="ระบุชื่อของคุณ"
+                        value={bookingData.name}
+                        onChange={(e) => setBookingData({ ...bookingData, name: e.target.value })}
+                        className="w-full bg-zinc-800 border border-white/10 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 outline-none placeholder:text-zinc-600 text-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Promotion Selector */}
+                  <div className="space-y-4 pt-4 border-t border-white/10">
+                    <label className="text-sm font-bold text-zinc-400 mb-3 block flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-amber-500" /> โปรโมชั่น (ถ้ามี)
+                    </label>
+                    <div className="flex flex-col gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedPromotion(null)}
+                        className={`p-4 rounded-2xl border text-left transition-all ${!selectedPromotion
+                          ? 'bg-amber-500 text-black border-amber-500 shadow-lg'
+                          : 'bg-zinc-800 text-zinc-400 border-white/5 hover:border-white/20'
+                          }`}
+                      >
+                        <div className="font-bold">ไม่ใช้โปรโมชั่น</div>
+                        <div className="text-xs opacity-70">จองราคาปกติ</div>
+                      </button>
+
+                      {promotions.map((promo) => (
+                        <button
+                          key={promo.id}
+                          type="button"
+                          onClick={() => setSelectedPromotion(promo)}
+                          className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden ${selectedPromotion?.id === promo.id
+                            ? 'bg-amber-500 text-black border-amber-500 shadow-lg'
+                            : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50'
+                            }`}
+                        >
+                          <div className="flex justify-between items-center relative z-10">
+                            <div>
+                              <div className="font-bold flex items-center gap-2">
+                                {promo.title}
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${selectedPromotion?.id === promo.id ? 'bg-black/20 border-black/20' : 'bg-amber-500/10 border-amber-500/20 text-amber-500'}`}>
+                                  {promo.code}
+                                </span>
+                              </div>
+                              <div className="text-xs mt-1 opacity-80">{promo.discount_text}</div>
+                            </div>
+                            <div className={`text-lg font-bold ${selectedPromotion?.id === promo.id ? 'text-black' : 'text-amber-500'}`}>
+                              {promo.discount_text}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: Success - แสดง QR Code สำหรับเพิ่มเพื่อน */}
+              {bookingStep === 'success' && (
+                <div className="p-8 text-center bg-zinc-950 min-h-[400px] flex flex-col items-center justify-center animate-[fadeIn_0.5s_ease-out]">
+                  <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-amber-500/10">
+                    <CheckCircle className="w-10 h-10 text-amber-500" />
+                  </div>
+                  <h4 className="text-3xl font-serif font-bold text-white mb-3 tracking-tight">จองคิวสำเร็จ!</h4>
+                  <p className="text-zinc-400 text-sm max-w-xs mx-auto mb-8 leading-relaxed">
+                    ขอบคุณที่ใช้บริการครับ เราจะส่งข้อความแจ้งเตือนไปยัง LINE ของคุณเมื่อใกล้ถึงคิวครับ
+                  </p>
+
+                  <div className="relative group">
+                    <div className="absolute -inset-4 bg-gradient-to-tr from-amber-500 to-amber-200 rounded-[2rem] opacity-20 blur-xl group-hover:opacity-40 transition-opacity"></div>
+                    <div className="relative bg-white p-4 rounded-3xl shadow-2xl border-4 border-amber-500/20">
+                      <img
+                        src="/line-oa-qr.png"
+                        alt="LINE OA QR Code"
+                        className="w-48 h-48 object-contain"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="mt-8 text-amber-500 font-bold flex items-center gap-2 animate-bounce">
+                    <Sparkles className="w-4 h-4" /> สแกนเพื่อเพิ่มเพื่อนรับการแจ้งเตือน
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer (Action Buttons) */}
+            {bookingStep === 'select' && (
+              <div className="p-6 border-t border-white/10 bg-zinc-900">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex flex-col">
+                    <span className="text-zinc-400 text-xs">ยอดรวมทั้งสิ้น</span>
+                    {selectedPromotion && (
+                      <span className="text-zinc-500 text-[10px] line-through decoration-zinc-600">฿{selectedPackage.price}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-2xl font-bold text-amber-500 font-num">฿{finalPrice}</span>
+                    {selectedPromotion && (
+                      <span className="text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-full mt-1">
+                        ประหยัดไป {selectedPackage.price - finalPrice} บาท
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={confirmBooking}
+                  disabled={bookingInProgress}
+                  className="w-full bg-amber-500 text-black py-4 rounded-xl font-bold hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 text-lg disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {bookingInProgress ? 'กำลังจอง...' : 'ยืนยันการจอง'}
+                </button>
+              </div>
+            )}
+            {bookingStep === 'success' && (
+              <div className="p-6 border-t border-white/10 bg-zinc-900">
+                <button
+                  onClick={closeAll}
+                  className="w-full bg-amber-500 text-black py-4 rounded-xl font-bold hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 text-lg"
+                >
+                  จองเสร็จสิ้น
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* --- NOTIFICATION MODAL --- */}
+      {notification.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-4">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" onClick={() => setNotification({ ...notification, show: false })}></div>
+          <div className="bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl border border-white/10 p-8 text-center relative z-10 animate-[slideUp_0.3s_ease-out]">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${notification.type === 'error' ? 'bg-red-500/20 text-red-500' :
+              notification.type === 'warning' ? 'bg-amber-500/20 text-amber-500' :
+                'bg-green-500/20 text-green-500'
+              }`}>
+              {notification.type === 'error' ? <XCircle className="w-8 h-8" /> :
+                notification.type === 'warning' ? <AlertCircle className="w-8 h-8" /> :
+                  <CheckCircle className="w-8 h-8" />}
+            </div>
+            <h4 className="text-xl font-bold text-white mb-2">
+              {notification.type === 'error' ? 'เกิดข้อผิดพลาด' :
+                notification.type === 'warning' ? 'แจ้งเตือน' :
+                  'สำเร็จ'}
+            </h4>
+            <p className="text-zinc-400 text-sm leading-relaxed mb-8">{notification.message}</p>
+            <button
+              onClick={() => setNotification({ ...notification, show: false })}
+              className={`w-full py-3 rounded-xl font-bold transition-all shadow-lg ${notification.type === 'error' ? 'bg-red-500 text-white hover:bg-red-400 shadow-red-500/20' :
+                'bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20'
+                }`}
+            >
+              ตกลง
+            </button>
+          </div>
         </div>
       )}
 

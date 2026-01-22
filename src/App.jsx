@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./layouts/Layout";
-import ProtectedRoute from "./routes/ProtectedRoute";
+import UserProtectedRoute from "./routes/UserProtectedRoute";
+import AdminRoute from "./routes/AdminRoute";
 
 // User Pages
 import Home from "./pages/Home";
@@ -33,15 +34,22 @@ export default function App() {
         <Route
           path="/profile"
           element={
-            <ProtectedRoute>
+            <UserProtectedRoute>
               <Profile />
-            </ProtectedRoute>
+            </UserProtectedRoute>
           }
         />
       </Route>
 
       {/* --- Admin Routes (หลังบ้าน) --- */}
-      <Route path="/admin" element={<AdminLayout />}>
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminLayout />
+          </AdminRoute>
+        }
+      >
         {/* เมื่อเข้า /admin เฉยๆ ให้เด้งไปหน้า dashboard */}
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
         
