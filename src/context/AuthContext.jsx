@@ -108,6 +108,17 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     if (!supabase) throw new Error("Supabase is not configured.");
+
+    // 1. Clear LIFF session if available
+    if (window.liff && window.liff.isLoggedIn()) {
+      try {
+        window.liff.logout();
+        console.log("LINE Logout successful");
+      } catch (err) {
+        console.error("LINE Logout error:", err);
+      }
+    }
+
     const { error } = await supabase.auth.signOut();
     if (error) console.error('Signout error:', error.message);
     setUser(null);

@@ -12,7 +12,6 @@ import {
   ArrowLeft,
   ChevronRight,
   ShieldCheck,
-  MessageCircle,
   CheckCircle,
   XCircle,
   AlertCircle
@@ -387,25 +386,6 @@ export default function Login() {
               </button>
             </form>
 
-            {/* Social Login Divider */}
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/5"></div>
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-zinc-900 px-4 text-zinc-500 font-bold tracking-widest">Or continue with</span>
-              </div>
-            </div>
-
-            {/* LINE Login Button */}
-            <button
-              onClick={handleLineLogin}
-              disabled={loading || liffLoading}
-              className="w-full bg-[#06C755] hover:bg-[#05b34d] text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(6,199,85,0.1)] hover:shadow-[0_0_30px_rgba(6,199,85,0.2)] transition-all duration-300 transform active:scale-[0.98] flex items-center justify-center gap-3 text-lg disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              <MessageCircle className="w-6 h-6 fill-white" />
-              {liffLoading ? "กำลังเชื่อมต่อ LINE..." : "เข้าสู่ระบบด้วย LINE"}
-            </button>
 
             {/* Toggle Login/Register */}
             <div className="mt-8 text-center pt-6 border-t border-white/5">
