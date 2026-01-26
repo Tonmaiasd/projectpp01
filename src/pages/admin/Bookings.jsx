@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useContext } from 'react';
 import { useNavigate } from 'react-router-dom'; // 1. Import useNavigate
 import { Search, Filter, MoreHorizontal, CheckCircle, XCircle, Clock, Calendar, X, Plus, CalendarClock, ArrowLeft, MessageSquareText, Check, AlertCircle } from 'lucide-react'; // เพิ่ม ArrowLeft
 import { supabase } from '../../supabase/client';
+import { AuthContext } from '../../context/AuthContext';
 
 export default function Bookings() {
+  const { user } = useContext(AuthContext);
   const navigate = useNavigate(); // 2. เรียกใช้ Hook
-  const [filterStatus, setFilterStatus] = useState('All');
+  const [filterStatus, setFilterStatus] = useState('Pending');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(true);
-  const [notifyingNextQueue, setNotifyingNextQueue] = useState(false);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
 
   const showNotification = (message, type = 'info') => {
@@ -21,7 +23,34 @@ export default function Bookings() {
 
   // --- State สำหรับ Modal Walk-in ---
   const [showWalkInModal, setShowWalkInModal] = useState(false);
-  const [walkInForm, setWalkInForm] = useState({ customer: '', service: '', date: new Date().toLocaleDateString('en-CA'), time: '09:30', price: 0 });
+  const [walkInForm, setWalkInForm] = useState({ customer: '', service: '', date: new Date().toISOString().split('T')[0], time: '09:30', price: 0 });
+
+  // --- State สำหรับ Modal แอดมินไม่ว่าง/ปิดร้าน ---
+  const [showBusyModal, setShowBusyModal] = useState(false);
+  const [busyForm, setBusyForm] = useState({
+    mode: 'range',
+    date: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    startTime: '13:00',
+    endTime: '15:00'
+  });
+  const [isProcessingBusy, setIsProcessingBusy] = useState(false);
+
+  // --- State สำหรับ Custom Confirmation Modal ---
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState({
+    title: '',
+    message: '',
+    onConfirm: () => { },
+    type: 'warning' // 'warning' | 'danger' | 'info'
+  });
+
+  // คำนวณวันที่สูงสุดที่เลือกได้ (2 สัปดาห์จากวันนี้)
+  const maxClosureDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 14);
+    return d.toISOString().split('T')[0];
+  }, []);
 
   // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 30 นาที)
   const timeSlots = useMemo(() => {
@@ -57,7 +86,8 @@ export default function Bookings() {
     const { data: bookingsData, error } = await supabase
       .from('bookings')
       .select('*')
-      .order('id', { ascending: false });
+      .eq('booking_date', selectedDate)
+      .order('booking_time', { ascending: true });
 
     if (error) {
       console.error('Error fetching bookings:', error);
@@ -88,7 +118,7 @@ export default function Bookings() {
     // map ฟิลด์จาก DB ให้ตรงกับที่ UI ใช้
     const mapped = data.map((b) => ({
       id: b.id,
-      customer: profilesMap[b.user_id]?.full_name || (b.user_id ? String(b.user_id).slice(0, 8) + '…' : b.customer_name || '-'),
+      customer: b.customer_name || profilesMap[b.user_id]?.full_name || (b.user_id ? String(b.user_id).slice(0, 8) + '…' : '-'),
       service: b.service_name,
       date: b.booking_date,
       time: b.booking_time,
@@ -122,8 +152,9 @@ export default function Bookings() {
   useEffect(() => {
     fetchBookings();
     fetchServices();
+  }, [selectedDate]);
 
-    // --- REALTIME SUBSCRIPTION ---
+  useEffect(() => {
     const channel = supabase
       .channel('schema-db-changes')
       .on(
@@ -223,13 +254,13 @@ export default function Bookings() {
     }
 
     const newBooking = {
-      // schema ไม่มี customer_name -> เก็บชื่อไว้ที่ UI เท่านั้น (หรือถ้าต้องการเก็บจริง ต้องเพิ่มคอลัมน์ใน DB)
-      user_id: null,
+      user_id: user?.id, // ใช้ ID ของแอดมินที่ล็อกอินอยู่
+      customer_name: walkInForm.customer, // บันทึกชื่อลูกค้าลง DB
       service_name: walkInForm.service,
       booking_date: walkInForm.date,
       booking_time: walkInForm.time,
       price: Number(walkInForm.price),
-      status: "Confirmed"
+      status: "Completed" // เป็น Completed ทันทีตามต้องการ
     };
 
     try {
@@ -251,6 +282,8 @@ export default function Bookings() {
             time: data.booking_time,
             price: data.price,
             status: data.status,
+            user_id: data.user_id,
+            applied_promo: data.applied_promo,
           },
           ...prev,
         ]);
@@ -312,6 +345,75 @@ export default function Bookings() {
     }
   };
 
+  const handleBusySubmit = async (e) => {
+    e.preventDefault();
+    const confirmDate = busyForm.date;
+    const confirmEndDate = busyForm.endDate;
+
+    let confirmMsg = "";
+    if (busyForm.mode === 'full') {
+      confirmMsg = `ต้องการยกเลิกคิวทั้งหมดในวันที่ ${confirmDate} ใช่หรือไม่?`;
+    } else if (busyForm.mode === 'multi') {
+      confirmMsg = `ต้องการยกเลิกคิวทั้งหมดตั้งแต่วันที่ ${confirmDate} ถึง ${confirmEndDate} ใช่หรือไม่?`;
+    } else {
+      confirmMsg = `ต้องการยกเลิกคิวในช่วงเวลา ${busyForm.startTime} - ${busyForm.endTime} ของวันที่ ${confirmDate} ใช่หรือไม่?`;
+    }
+
+    setConfirmConfig({
+      title: 'ยืนยันการดำเนินการ',
+      message: confirmMsg,
+      onConfirm: () => executeBusySubmit(confirmDate, confirmEndDate),
+      type: 'danger'
+    });
+    setShowConfirmModal(true);
+  };
+
+  const executeBusySubmit = async (confirmDate, confirmEndDate) => {
+    setShowConfirmModal(false);
+    setIsProcessingBusy(true);
+    try {
+      let endpoint = '';
+      let body = {};
+
+      if (busyForm.mode === 'full') {
+        endpoint = 'http://localhost:3001/api/cancel-full-day-bookings';
+        body = { date: confirmDate };
+      } else if (busyForm.mode === 'multi') {
+        endpoint = 'http://localhost:3001/api/cancel-multi-day-bookings';
+        body = { startDate: confirmDate, endDate: confirmEndDate };
+      } else {
+        endpoint = 'http://localhost:3001/api/cancel-time-range-bookings';
+        body = { date: confirmDate, startTime: busyForm.startTime, endTime: busyForm.endTime };
+      }
+
+      const response = await fetch(endpoint, {
+        method: 'POST', // Corrected: Using POST as per backend
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Server error (${response.status}): ${errorText.slice(0, 100)}...`);
+      }
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("เซิร์ฟเวอร์ไม่ได้ตอบกลับเป็น JSON กรุณารีสตาร์ทเซิร์ฟเวอร์หลังบ้านครับ");
+      }
+
+      const result = await response.json();
+      showNotification(result.message, "success");
+      setShowBusyModal(false);
+      fetchBookings(); // รีเฟรชข้อมูล
+    } catch (error) {
+      console.error('Busy submit error:', error);
+      showNotification(error.message, "error");
+    } finally {
+      setIsProcessingBusy(false);
+    }
+  };
+
   // ฟังก์ชันกรองข้อมูล
   const filteredBookings = bookings.filter(booking => {
     const matchesStatus = filterStatus === 'All' || booking.status === filterStatus;
@@ -322,7 +424,7 @@ export default function Bookings() {
 
   const getStatusBadge = (status) => {
     const styles = {
-      Completed: "bg-green-500/10 text-green-500 border-green-500/20",
+      lCompeted: "bg-green-500/10 text-green-500 border-green-500/20",
       Pending: "bg-amber-500/10 text-amber-500 border-amber-500/20",
       Confirmed: "bg-blue-500/10 text-blue-500 border-blue-500/20",
       Cancelled: "bg-red-500/10 text-red-500 border-red-500/20",
@@ -364,22 +466,15 @@ export default function Bookings() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {/* ปุ่ม "คิวถัดไป" */}
+
           <button
-            onClick={() => handleNotifyNextQueue()}
-            disabled={notifyingNextQueue}
-            className="bg-sky-600 hover:bg-sky-500 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg shadow-sky-600/20 flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed active:scale-95"
+            onClick={() => {
+              setBusyForm(prev => ({ ...prev, date: selectedDate, endDate: selectedDate }));
+              setShowBusyModal(true);
+            }}
+            className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2 active:scale-95"
           >
-            {notifyingNextQueue ? (
-              <span className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
-                กำลังแจ้งเตือน...
-              </span>
-            ) : (
-              <>
-                <MessageSquareText size={18} /> แจ้งเตือนคิวถัดไป
-              </>
-            )}
+            <Clock size={18} /> ประกาศไม่ว่าง/ปิดร้าน
           </button>
 
           {/* ปุ่มเปิด Modal */}
@@ -394,20 +489,36 @@ export default function Bookings() {
 
       {/* Filters & Search */}
       <div className="bg-zinc-900 p-4 rounded-2xl border border-white/5 flex flex-col md:flex-row gap-4 justify-between items-center shadow-lg">
-        <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 w-full md:w-auto scrollbar-hide">
-          {['All', 'Pending', 'Completed', 'Cancelled'].map(status => (
-            <button
-              key={status}
-              onClick={() => setFilterStatus(status)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${filterStatus === status
-                ? 'bg-zinc-800 text-white border border-white/10 shadow-sm'
-                : 'text-zinc-400 hover:bg-white/5 hover:text-white'
-                }`}
-            >
-              {status}
-            </button>
-          ))}
+        <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+          {/* Date Selector */}
+          <div className="relative w-full md:w-auto">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 w-4 h-4" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-full md:w-44 bg-zinc-950 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:border-amber-500/50 outline-none transition-all font-num"
+            />
+          </div>
+
+          <div className="h-6 w-px bg-white/10 hidden md:block"></div>
+
+          <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 w-full md:w-auto scrollbar-hide">
+            {['All', 'Pending', 'Completed', 'Cancelled'].map(status => (
+              <button
+                key={status}
+                onClick={() => setFilterStatus(status)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap ${filterStatus === status
+                  ? 'bg-zinc-800 text-white border border-white/10 shadow-sm'
+                  : 'text-zinc-400 hover:bg-white/5 hover:text-white'
+                  }`}
+              >
+                {status}
+              </button>
+            ))}
+          </div>
         </div>
+
         <div className="relative w-full md:w-72">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 w-4 h-4" />
           <input
@@ -646,6 +757,176 @@ export default function Bookings() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- Busy/Closure Modal --- */}
+      {showBusyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-white/10 shadow-2xl p-6 animate-[slideUp_0.3s_ease-out]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                <Clock size={20} className="text-red-500" /> ประกาศไม่ว่าง/ปิดร้าน
+              </h3>
+              <button onClick={() => setShowBusyModal(false)} className="text-zinc-500 hover:text-white transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleBusySubmit} className="space-y-6">
+              <div className="bg-red-500/5 border border-red-500/10 p-4 rounded-xl">
+                <p className="text-red-400 text-xs leading-relaxed flex items-start gap-2">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  การแจ้งไม่ว่างจะทำการยกเลิกคิว (Pending) ทั้งหมดในช่วงเวลาที่เลือก และส่งข้อความ LINE แจ้งลูกค้าโดยอัตโนมัติ
+                </p>
+              </div>
+
+              <div className="flex p-1 bg-zinc-950 rounded-xl border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setBusyForm({ ...busyForm, mode: 'range' })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === 'range' ? 'bg-zinc-800 text-white border border-white/10 shadow-sm' : 'text-zinc-500 hover:text-zinc-400'}`}
+                >
+                  ระบุช่วงเวลา
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBusyForm({ ...busyForm, mode: 'full' })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === 'full' ? 'bg-zinc-800 text-white border border-white/10 shadow-sm' : 'text-zinc-500 hover:text-zinc-400'}`}
+                >
+                  หยุดร้าน
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBusyForm({ ...busyForm, mode: 'multi' })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === 'multi' ? 'bg-zinc-800 text-white border border-white/10 shadow-sm' : 'text-zinc-500 hover:text-zinc-400'}`}
+                >
+                  หยุดหลายวัน
+                </button>
+              </div>
+
+              {busyForm.mode === 'multi' ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm text-zinc-400 mb-2 block">เริ่มหยุดวันที่</label>
+                    <input
+                      type="date"
+                      value={busyForm.date}
+                      min={new Date().toISOString().split('T')[0]}
+                      max={maxClosureDate}
+                      onChange={e => setBusyForm({ ...busyForm, date: e.target.value })}
+                      className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm text-zinc-400 mb-2 block">หยุดถึงวันที่</label>
+                    <input
+                      type="date"
+                      value={busyForm.endDate}
+                      min={busyForm.date}
+                      max={maxClosureDate}
+                      onChange={e => setBusyForm({ ...busyForm, endDate: e.target.value })}
+                      className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-sm text-zinc-400 mb-2 block">วันที่ดำเนินการ</label>
+                  <input
+                    type="date"
+                    value={busyForm.date}
+                    min={new Date().toISOString().split('T')[0]}
+                    max={maxClosureDate}
+                    onChange={e => setBusyForm({ ...busyForm, date: e.target.value })}
+                    className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
+                  />
+                </div>
+              )}
+
+              {busyForm.mode === 'range' && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm text-zinc-400 mb-2 block">เวลาเริ่มต้น</label>
+                    <select
+                      value={busyForm.startTime}
+                      onChange={e => setBusyForm({ ...busyForm, startTime: e.target.value })}
+                      className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-red-500/50 outline-none font-num"
+                    >
+                      {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm text-zinc-400 mb-2 block">เวลาสิ้นสุด</label>
+                    <select
+                      value={busyForm.endTime}
+                      onChange={e => setBusyForm({ ...busyForm, endTime: e.target.value })}
+                      className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-red-500/50 outline-none font-num"
+                    >
+                      {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBusyModal(false)}
+                  className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isProcessingBusy}
+                  className="flex-[2] py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
+                >
+                  {isProcessingBusy ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
+                      กำลังดำเนินการ...
+                    </>
+                  ) : (
+                    'ยืนยันประกาศไม่ว่าง'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- Custom Confirmation Modal (Card Style) --- */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out]">
+            <div className={`h-2 w-full ${confirmConfig.type === 'danger' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+            <div className="p-8 text-center">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${confirmConfig.type === 'danger' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
+                }`}>
+                {confirmConfig.type === 'danger' ? <AlertCircle size={32} /> : <CheckCircle size={32} />}
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">{confirmConfig.title}</h3>
+              <p className="text-zinc-400 text-sm leading-relaxed mb-8">{confirmConfig.message}</p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all active:scale-95"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={confirmConfig.onConfirm}
+                  className={`flex-1 py-3 rounded-xl font-bold text-white transition-all active:scale-95 shadow-lg ${confirmConfig.type === 'danger' ? 'bg-red-600 hover:bg-red-500 shadow-red-600/20' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20'
+                    }`}
+                >
+                  ยืนยัน
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

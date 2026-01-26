@@ -12,7 +12,6 @@ export default function Booking() {
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
 
-  console.log('🔍 Booking component rendered, user:', user?.id);
 
   // --- State Management ---
   const [filterOpen, setFilterOpen] = useState(false);
@@ -38,25 +37,40 @@ export default function Booking() {
     tel: ''
   });
   const [bookedSlots, setBookedSlots] = useState([]);
+  const [adminBusySlots, setAdminBusySlots] = useState([]);
 
   // Fetch booked slots for the selected date
   useEffect(() => {
     if (bookingData.date) {
-      const fetchBookedSlots = async () => {
+      const fetchBookedAndBusySlots = async () => {
         try {
-          const { data, error } = await supabase
+          // 1. Fetch normal bookings
+          const { data: bData, error: bError } = await supabase
             .from('bookings')
             .select('booking_time')
             .eq('booking_date', bookingData.date)
-            .neq('status', 'Cancelled');
+            .in('status', ['Pending', 'Confirmed']);
 
-          if (error) throw error;
-          setBookedSlots(data.map(b => b.booking_time));
+          if (bError) throw bError;
+          setBookedSlots(bData.map(b => b.booking_time));
+
+          // 2. Fetch admin busy times
+          const { data: busyData, error: busyError } = await supabase
+            .from('admin_busy_times')
+            .select('*')
+            .eq('busy_date', bookingData.date);
+
+          if (busyError) {
+            console.error('Error fetching busy slots:', busyError);
+          } else {
+            setAdminBusySlots(busyData || []);
+          }
+
         } catch (err) {
-          console.error('Error fetching booked slots:', err);
+          console.error('Error fetching slots:', err);
         }
       };
-      fetchBookedSlots();
+      fetchBookedAndBusySlots();
     }
   }, [bookingData.date]);
 
@@ -85,7 +99,6 @@ export default function Booking() {
   // --- Data Fetching ---
   // Helper function to fetch services
   const fetchServices = async () => {
-    console.log('🔄 Starting fetchServices...');
     setLoading(true);
     setError(null);
 
@@ -93,7 +106,6 @@ export default function Booking() {
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
     try {
-      console.log('📡 Fetching services from Supabase...');
       const { data, error } = await supabase
         .from('services')
         .select('*');
@@ -114,8 +126,6 @@ export default function Booking() {
         return;
       }
 
-      console.log('✅ Services fetched:', data.length, 'items');
-      console.log('First item:', data[0]);
 
       const mappedData = data.map(service => ({
         ...service,
@@ -126,7 +136,6 @@ export default function Booking() {
       }));
 
       setPackages(mappedData);
-      console.log('✅ Packages state updated with', mappedData.length, 'items');
     } catch (err) {
       clearTimeout(timeoutId);
       console.error("❌ Error fetching services:", err);
@@ -138,7 +147,6 @@ export default function Booking() {
 
   // Fetch services and promotions on component mount
   useEffect(() => {
-    console.log('📌 useEffect mounted (empty dependency)');
     const fetchInitialData = async () => {
       setLoading(true);
       await Promise.all([
@@ -161,7 +169,6 @@ export default function Booking() {
 
       if (error) throw error;
       setPromotions(data || []);
-      console.log('✅ Promotions fetched:', data?.length);
     } catch (err) {
       console.error('Error fetching promotions:', err);
     }
@@ -217,9 +224,14 @@ export default function Booking() {
     }
 
     const today = new Date().toLocaleDateString('en-CA');
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 7);
+    const maxDateStr = maxDate.toLocaleDateString('en-CA');
+
     // Pre-fill booking data with user's profile info from profiles table
     setBookingData({
       date: today,
+      maxDate: maxDateStr,
       time: '',
       name: userProfile?.full_name || user.user_metadata?.name || '',
       tel: userProfile?.phone || user.user_metadata?.phone || ''
@@ -275,7 +287,7 @@ export default function Booking() {
         .select('id')
         .eq('booking_date', bookingData.date)
         .eq('booking_time', bookingData.time)
-        .neq('status', 'Cancelled')
+        .in('status', ['Pending', 'Confirmed'])
         .maybeSingle();
 
       if (existing) {
@@ -286,8 +298,26 @@ export default function Booking() {
           .from('bookings')
           .select('booking_time')
           .eq('booking_date', bookingData.date)
-          .neq('status', 'Cancelled');
+          .in('status', ['Pending', 'Confirmed']);
         setBookedSlots(newData ? newData.map(b => b.booking_time) : []);
+        return;
+      }
+
+      // --- USER LIMIT CHECK (1 Booking per day) ---
+      const { data: userExisting, error: userCheckError } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('booking_date', bookingData.date)
+        .neq('status', 'Cancelled');
+
+      if (userCheckError) {
+        console.error('Error checking user existing bookings:', userCheckError);
+      }
+
+      if (userExisting && userExisting.length > 0) {
+        showNotification("คุณมีการจองในวันนี้อยู่แล้วครับ (จำกัด 1 ครั้งต่อวันต่อท่าน)", "warning");
+        setBookingInProgress(false);
         return;
       }
 
@@ -572,7 +602,8 @@ export default function Booking() {
                       <input
                         type="date"
                         value={bookingData.date}
-                        min={new Date().toLocaleDateString('en-CA')}
+                        min={new Date().toISOString().split('T')[0]}
+                        max={bookingData.maxDate}
                         onChange={(e) => setBookingData({ ...bookingData, date: e.target.value })}
                         className="w-full bg-zinc-800 border border-white/10 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 outline-none text-white scheme-dark font-num"
                       />
@@ -584,20 +615,28 @@ export default function Booking() {
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {timeSlots.map((slot) => {
                           const isBooked = bookedSlots.some(bTime => bTime && bTime.startsWith(slot));
+
+                          // Check if admin is busy in this slot
+                          const isAdminBusy = adminBusySlots.some(busy => {
+                            return slot >= busy.start_time.slice(0, 5) && slot <= busy.end_time.slice(0, 5);
+                          });
+
                           return (
                             <button
                               key={slot}
                               type="button"
-                              disabled={isBooked}
+                              disabled={isBooked || isAdminBusy}
                               onClick={() => setBookingData({ ...bookingData, time: slot })}
                               className={`py-2.5 rounded-xl text-sm font-num font-bold transition-all border ${bookingData.time === slot
                                 ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] scale-105'
-                                : isBooked
-                                  ? 'bg-transparent text-white/5 border-white/5 cursor-not-allowed'
-                                  : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
+                                : isAdminBusy
+                                  ? 'bg-red-500/10 text-red-500 border-red-500/20 cursor-not-allowed opacity-40'
+                                  : isBooked
+                                    ? 'bg-amber-500/10 text-amber-500/50 border-amber-500/20 cursor-not-allowed opacity-40'
+                                    : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
                                 }`}
                             >
-                              {slot}
+                              {isAdminBusy ? 'ไม่ว่าง' : slot}
                             </button>
                           );
                         })}

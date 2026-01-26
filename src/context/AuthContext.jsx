@@ -24,7 +24,6 @@ export const AuthProvider = ({ children }) => {
       }
 
       const adminStatus = data?.is_admin ?? false;
-      console.log(`User Role Check: Is Admin? -> ${adminStatus}`);
       setIsAdmin(adminStatus); // อัปเดต State ตรงนี้
       return adminStatus;
     } catch (err) {

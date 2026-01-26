@@ -16,6 +16,7 @@ import AdminBookings from "./pages/admin/Bookings";
 import AdminServices from "./pages/admin/Services";
 import AdminUsers from "./pages/admin/Users";
 import AdminPromotions from "./pages/admin/Promotions";
+import AdminHolidays from "./pages/admin/Holidays";
 
 export default function App() {
   return (
@@ -26,7 +27,7 @@ export default function App() {
       {/* --- User Routes (ลูกค้า) --- */}
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
-        
+
         {/* หน้า Booking เปิดให้ทุกคนเข้าดูได้ (เช็ค Login ตอนกดปุ่มจอง) */}
         <Route path="/booking" element={<Booking />} />
 
@@ -52,12 +53,13 @@ export default function App() {
       >
         {/* เมื่อเข้า /admin เฉยๆ ให้เด้งไปหน้า dashboard */}
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
-        
+
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="bookings" element={<AdminBookings />} />
         <Route path="services" element={<AdminServices />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="promotions" element={<AdminPromotions />} />
+        <Route path="holidays" element={<AdminHolidays />} />
       </Route>
 
       {/* Catch-all route: ถ้าพิมพ์ URL ผิด ให้กลับไปหน้าแรก */}

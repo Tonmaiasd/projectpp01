@@ -167,8 +167,327 @@ app.post('/api/next-queue', async (req, res) => {
   }
 });
 
+// Endpoint: ยกเลิกคิวตามช่วงเวลา (Busy Time Range)
+app.post('/api/cancel-time-range-bookings', async (req, res) => {
+  const { date, startTime, endTime } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!date || !startTime || !endTime) {
+    return res.status(400).json({ error: 'Missing required parameters (date, startTime, endTime)' });
+  }
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 1. ค้นหารายการ Pending ในช่วงเวลาดังกล่าว
+    const { data: bookings, error: fError } = await supabaseAdmin
+      .from('bookings')
+      .select('*')
+      .eq('booking_date', date)
+      .eq('status', 'Pending')
+      .gte('booking_time', startTime)
+      .lte('booking_time', endTime);
+
+    if (fError) throw fError;
+
+    // 2. บันทึกช่วงเวลาไม่ว่างลงในตาราง admin_busy_times (ทำเสมอแม้ไม่มีคิว)
+    const { error: iError } = await supabaseAdmin
+      .from('admin_busy_times')
+      .insert([{
+        busy_date: date,
+        start_time: startTime,
+        end_time: endTime,
+        is_full_day: false
+      }]);
+
+    if (iError) {
+      console.error('Failed to record busy time:', iError.message);
+      return res.status(500).json({ error: 'ไม่สามารถบันทึกเวลาไม่ว่างได้ (ตรวจสอบว่าสร้างตาราง admin_busy_times หรือยัง): ' + iError.message });
+    }
+
+    if (!bookings || bookings.length === 0) {
+      return res.json({ success: true, message: 'ประกาศไม่ว่างเรียบร้อยแล้ว (ไม่มีคิวที่ถูกยกเลิก)', count: 0 });
+    }
+
+    // 3. ยกเลิกและแจ้งเตือนทีละรายการ
+    const customMsg = `ขออภัยครับ แอดมินไม่สะดวกในช่วงเวลาที่คุณจองไว้ (${startTime.slice(0, 5)} - ${endTime.slice(0, 5)} น.) เนื่องจากติดธุระด่วน จึงขออนุญาตยกเลิกคิว และรบกวนคุณจองเข้ามาใหม่ในเวลาอื่นครับ 🙏`;
+
+    let successCount = 0;
+    for (const b of bookings) {
+      const { error: uError } = await supabaseAdmin
+        .from('bookings')
+        .update({ status: 'Cancelled' })
+        .eq('id', b.id);
+
+      if (!uError) {
+        try {
+          await sendLineNotification(supabaseAdmin, b, customMsg);
+          successCount++;
+        } catch (err) {
+          console.warn(`Failed to notify booking #${b.id}:`, err.message);
+        }
+      }
+    }
+
+    res.json({ success: true, message: `ยกเลิกและแจ้งเตือนเรียบร้อยแล้ว ${successCount} รายการ`, count: successCount });
+  } catch (err) {
+    console.error('Error in /api/cancel-time-range-bookings:', err.message);
+    res.status(500).json({ error: 'Failed to process cancellation: ' + err.message });
+  }
+});
+
+// Endpoint: ยกเลิกคิวทั้งวัน (Full Day / Shop Closed)
+app.post('/api/cancel-full-day-bookings', async (req, res) => {
+  const { date } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!date) return res.status(400).json({ error: 'Missing date' });
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const { data: bookings, error: fError } = await supabaseAdmin
+      .from('bookings')
+      .select('*')
+      .eq('booking_date', date)
+      .eq('status', 'Pending');
+
+    if (fError) throw fError;
+
+    // 2. บันทึกการหยุดร้านทั้งวันลงในตาราง admin_busy_times (ทำเสมอแม้ไม่มีคิว)
+    const { error: iError } = await supabaseAdmin
+      .from('admin_busy_times')
+      .insert([{
+        busy_date: date,
+        start_time: '09:00', // เวลาเริ่มต้นร้าน
+        end_time: '20:00',   // เวลาปิดร้าน
+        is_full_day: true
+      }]);
+
+    if (iError) {
+      console.error('Failed to record full day busy time:', iError.message);
+      return res.status(500).json({ error: 'ไม่สามารถบันทึกเวลาหยุดร้านได้ (ตรวจสอบว่าสร้างตาราง admin_busy_times หรือยัง): ' + iError.message });
+    }
+
+    if (!bookings || bookings.length === 0) {
+      return res.json({ success: true, message: 'ประกาศหยุดร้านเรียบร้อยแล้ว (ไม่มีคิวที่ถูกยกเลิก)', count: 0 });
+    }
+
+    const customMsg = `ขออภัยครับ วันนี้ร้านปิดหรือแอดมินติดธุระทั้งวัน จึงขออนุญาตยกเลิกคิวของคุณ และรบกวนจองเข้ามาใหม่ในวันอื่นที่สะดวกครับ 🙏`;
+
+    let successCount = 0;
+    for (const b of bookings) {
+      const { error: uError } = await supabaseAdmin
+        .from('bookings')
+        .update({ status: 'Cancelled' })
+        .eq('id', b.id);
+
+      if (!uError) {
+        try {
+          await sendLineNotification(supabaseAdmin, b, customMsg);
+          successCount++;
+        } catch (err) {
+          console.warn(`Failed to notify booking #${b.id}:`, err.message);
+        }
+      }
+    }
+
+    res.json({ success: true, message: `ยกเลิกคิวทั้งวันและแจ้งเตือนเรียบร้อยแล้ว ${successCount} รายการ`, count: successCount });
+  } catch (err) {
+    console.error('Error in /api/cancel-full-day-bookings:', err.message);
+    res.status(500).json({ error: 'Failed to process cancellation: ' + err.message });
+  }
+});
+
+// Endpoint: ยกเลิกคิวหลายวัน (Multi-day Closure)
+app.post('/api/cancel-multi-day-bookings', async (req, res) => {
+  const { startDate, endDate } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!startDate || !endDate) {
+    return res.status(400).json({ error: 'Missing startDate or endDate' });
+  }
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // สร้าง Array ของวันที่ในช่วงนั้น
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const dates = [];
+    let current = new Date(start);
+
+    while (current <= end) {
+      dates.push(current.toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 1);
+    }
+
+    if (dates.length > 31) {
+      return res.status(400).json({ error: 'ไม่อนุญาตให้ปิดร้านเกิน 31 วันในครั้งเดียว' });
+    }
+
+    const customMsg = `ขออภัยครับ ในช่วงวันที่คุณจองไว้ร้านปิดหรือแอดมินติดธุระ จึงขออนุญาตยกเลิกคิวของคุณ และรบกวนจองเข้ามาใหม่ในภายหลังครับ 🙏`;
+    let totalCancelled = 0;
+
+    for (const date of dates) {
+      // 1. ค้นหาคิว Pending ในแต่ละวัน
+      const { data: bookings } = await supabaseAdmin
+        .from('bookings')
+        .select('*')
+        .eq('booking_date', date)
+        .eq('status', 'Pending');
+
+      // 2. บันทึกการหยุดร้านลง admin_busy_times
+      const { error: iError } = await supabaseAdmin
+        .from('admin_busy_times')
+        .insert([{
+          busy_date: date,
+          start_time: '09:00',
+          end_time: '20:00',
+          is_full_day: true
+        }]);
+
+      if (iError) {
+        console.error(`Failed to record busy time for ${date}:`, iError.message);
+        throw new Error(`ไม่สามารถบันทึกวันหยุดสำหรับวันที่ ${date} ได้`);
+      }
+
+      // 3. ยกเลิกคิวและแจ้งเตือน
+      if (bookings && bookings.length > 0) {
+        for (const b of bookings) {
+          const { error: uError } = await supabaseAdmin
+            .from('bookings')
+            .update({ status: 'Cancelled' })
+            .eq('id', b.id);
+
+          if (!uError) {
+            try {
+              await sendLineNotification(supabaseAdmin, b, customMsg);
+              totalCancelled++;
+            } catch (err) {
+              console.warn(`Failed to notify booking #${b.id}:`, err.message);
+            }
+          }
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `บันทึกวันหยุดเรียบร้อยแล้ว (${dates.length} วัน) และยกเลิกคิวรวม ${totalCancelled} รายการ`,
+      count: totalCancelled
+    });
+  } catch (err) {
+    console.error('Error in /api/cancel-multi-day-bookings:', err.message);
+    res.status(500).json({ error: 'Failed to process multi-day cancellation: ' + err.message });
+  }
+});
+
+// Endpoint: ลบวันหยุด/เวลาไม่ว่าง
+app.post('/api/delete-holiday', async (req, res) => {
+  const { id } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!id) return res.status(400).json({ error: 'Missing holiday ID' });
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { error } = await supabaseAdmin
+      .from('admin_busy_times')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ success: true, message: 'ลบรายการเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('Error in /api/delete-holiday:', err.message);
+    res.status(500).json({ error: 'Failed to delete holiday: ' + err.message });
+  }
+});
+
+// Endpoint: เลื่อนคิวจองและแจ้งเตือน LINE
+app.post('/api/reschedule-booking', async (req, res) => {
+  const { bookingId, newDate, newTime, oldDate, oldTime, serviceName } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!bookingId || !newDate || !newTime) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 1. Update Booking
+    const { data: booking, error: updateError } = await supabaseAdmin
+      .from('bookings')
+      .update({
+        booking_date: newDate,
+        booking_time: newTime
+      })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // 2. Send LINE Notification
+    const formattedOldDate = new Date(oldDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+    const formattedNewDate = new Date(newDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+
+    const msg = `🔄 แจ้งเตือนการเลื่อนคิวจองครับ\n\nบริการ: ${serviceName}\n\n📅 เลื่อนจาก: ${formattedOldDate} (${oldTime.slice(0, 5)} น.)\n➡️ ไปเป็น: ${formattedNewDate} (${newTime.slice(0, 5)} น.)\n\nระบบได้อัปเดตเวลาให้เรียบร้อยแล้วครับ ขอบคุณครับ ✨`;
+
+    await sendLineNotification(supabaseAdmin, booking, msg);
+
+    res.json({ success: true, message: 'เลื่อนคิวจองและแจ้งเตือนเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('Error in /api/reschedule-booking:', err.message);
+    res.status(500).json({ error: 'Failed to reschedule booking: ' + err.message });
+  }
+});
+
+// Endpoint: ยกเลิกการจองและแจ้งเตือน LINE
+app.post('/api/cancel-booking', async (req, res) => {
+  const { bookingId, customerName, serviceName, bookingDate, bookingTime } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!bookingId) {
+    return res.status(400).json({ error: 'Missing bookingId' });
+  }
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 1. Update status to Cancelled
+    const { data: booking, error: updateError } = await supabaseAdmin
+      .from('bookings')
+      .update({ status: 'Cancelled' })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // 2. Send LINE Notification
+    const formattedDate = new Date(bookingDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+    const msg = `❌ แจ้งเตือนการยกเลิกคิวจองครับ\n\nคุณ ${customerName} ได้ยกเลิกการจอง:\n🔹 บริการ: ${serviceName}\n📅 วันที่: ${formattedDate}\n⏰ เวลา: ${bookingTime.slice(0, 5)} น.\n\nระบบได้ดำเนินการยกเลิกคิวให้เรียบร้อยแล้วครับ ✨`;
+
+    await sendLineNotification(supabaseAdmin, booking, msg);
+
+    res.json({ success: true, message: 'ยกเลิกการจองเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('Error in /api/cancel-booking:', err.message);
+    res.status(500).json({ error: 'Failed to cancel booking: ' + err.message });
+  }
+});
+
 // --- HELPER FUNCTION FOR LINE NOTIFICATION ---
-async function sendLineNotification(supabaseAdmin, booking) {
+async function sendLineNotification(supabaseAdmin, booking, customMessage = null) {
   let lineUserId = null;
   if (booking.user_id) {
     const { data: profile } = await supabaseAdmin
@@ -180,15 +499,18 @@ async function sendLineNotification(supabaseAdmin, booking) {
   }
 
   if (!lineUserId) {
-    throw new Error('ลูกค้ายังไม่ได้เชื่อมต่อระบบ LINE');
+    console.log(`User ${booking.user_id} has no line_user_id`);
+    return; // Don't throw, just skip
   }
+
+  const defaultMsg = `📢 คุณ ${booking.customer_name} ครับ\nใกล้ถึงคิวของคุณแล้วสำหรับการบริการ: ${booking.service_name}\nเวลา: ${booking.booking_time.slice(0, 5)} น.\n\nกรุณาเตรียมตัวเข้ามาใช้บริการที่ร้าน Lor Loei Cuts ได้เลยครับ ✨`;
 
   const message = {
     to: lineUserId,
     messages: [
       {
         type: 'text',
-        text: `📢 คุณ ${booking.customer_name} ครับ\nใกล้ถึงคิวของคุณแล้วสำหรับการบริการ: ${booking.service_name}\nเวลา: ${booking.booking_time.slice(0, 5)} น.\n\nกรุณาเตรียมตัวเข้ามาใช้บริการที่ร้าน Lor Loei Cuts ได้เลยครับ ✨`
+        text: customMessage || defaultMsg
       }
     ]
   };
