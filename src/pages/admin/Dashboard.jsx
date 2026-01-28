@@ -4,6 +4,7 @@ import {
   MoreHorizontal, CheckCircle, XCircle, Clock
 } from 'lucide-react';
 import { supabase } from '../../supabase/client';
+import Pagination from '../../components/Pagination';
 
 export default function Dashboard() {
   const [bookings, setBookings] = useState([]);
@@ -12,6 +13,7 @@ export default function Dashboard() {
 
   const [realtimeStatus, setRealtimeStatus] = useState('connecting');
   const [period, setPeriod] = useState('daily'); // 'daily' | 'monthly' | 'yearly'
+  const [dashboardPage, setDashboardPage] = useState(1); //Pagination
 
   // สถานะสำหรับเลือกช่วงเวลาเจาะจง
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
@@ -137,6 +139,19 @@ export default function Dashboard() {
 
     return { stats: statsData, filteredBookings: filtered, subLabel };
   }, [bookings, period, selectedDate, selectedMonth, selectedYear]);
+
+  // Pagination for dashboard bookings
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredBookings.length / ITEMS_PER_PAGE));
+  const paginatedBookings = useMemo(() => {
+    const start = (dashboardPage - 1) * ITEMS_PER_PAGE;
+    return filteredBookings.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredBookings, dashboardPage]);
+
+  // Reset page when period changes
+  useEffect(() => {
+    setDashboardPage(1);
+  }, [period, selectedDate, selectedMonth, selectedYear]);
 
   const getStatusBadge = (status) => {
     const styles = {
@@ -279,7 +294,7 @@ export default function Dashboard() {
                 <tr><td colSpan="6" className="px-6 py-10 text-center text-zinc-500">กำลังโหลด...</td></tr>
               ) : filteredBookings.length === 0 ? (
                 <tr><td colSpan="6" className="px-6 py-10 text-center text-zinc-500 italic">ไม่มีรายการจองในช่วงเวลานี้</td></tr>
-              ) : filteredBookings.slice(0, 15).map((booking) => (
+              ) : paginatedBookings.map((booking) => (
                 <tr key={booking.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-6 py-4 font-num text-zinc-500">#{booking.id}</td>
                   <td className="px-6 py-4 font-bold text-white">{booking.customer}</td>
@@ -294,6 +309,17 @@ export default function Dashboard() {
             </tbody>
           </table>
         </div>
+        {filteredBookings.length > 0 && (
+          <div className="px-6">
+            <Pagination
+              currentPage={dashboardPage}
+              totalPages={totalPages}
+              onPageChange={setDashboardPage}
+              itemsPerPage={ITEMS_PER_PAGE}
+              totalItems={filteredBookings.length}
+            />
+          </div>
+        )}
       </div>
 
     </div>

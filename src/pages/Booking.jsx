@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/client';
 import { AuthContext } from '../context/AuthContext';
+import Pagination from '../components/Pagination';
 import {
   Search, SlidersHorizontal, Star, Clock,
   Sparkles, X, ChevronRight,
@@ -36,42 +37,64 @@ export default function Booking() {
     name: '',
     tel: ''
   });
+  const [createdBooking, setCreatedBooking] = useState(null); // เก็บข้อมูลคิวที่สร้างแล้ว ไว้ส่งแจ้งเตือนตอนกด "จองเสร็จสิ้น"
   const [bookedSlots, setBookedSlots] = useState([]);
   const [adminBusySlots, setAdminBusySlots] = useState([]);
+  const [servicesPage, setServicesPage] = useState(1); // Pagination for services
 
   // Fetch booked slots for the selected date
-  useEffect(() => {
-    if (bookingData.date) {
-      const fetchBookedAndBusySlots = async () => {
-        try {
-          // 1. Fetch normal bookings
-          const { data: bData, error: bError } = await supabase
-            .from('bookings')
-            .select('booking_time')
-            .eq('booking_date', bookingData.date)
-            .in('status', ['Pending', 'Confirmed']);
+  const fetchBookedAndBusySlots = async () => {
+    if (!bookingData.date) return;
+    try {
+      // 1. Fetch normal bookings (Pending, Confirmed, and Completed block slots)
+      const { data: bData, error: bError } = await supabase
+        .from('bookings')
+        .select('booking_time')
+        .eq('booking_date', bookingData.date)
+        .in('status', ['Pending', 'Confirmed', 'Completed']);
 
-          if (bError) throw bError;
-          setBookedSlots(bData.map(b => b.booking_time));
+      if (bError) throw bError;
+      setBookedSlots(bData.map(b => b.booking_time));
 
-          // 2. Fetch admin busy times
-          const { data: busyData, error: busyError } = await supabase
-            .from('admin_busy_times')
-            .select('*')
-            .eq('busy_date', bookingData.date);
+      // 2. Fetch admin busy times
+      const { data: busyData, error: busyError } = await supabase
+        .from('admin_busy_times')
+        .select('*')
+        .eq('busy_date', bookingData.date);
 
-          if (busyError) {
-            console.error('Error fetching busy slots:', busyError);
-          } else {
-            setAdminBusySlots(busyData || []);
-          }
+      if (busyError) {
+        console.error('Error fetching busy slots:', busyError);
+      } else {
+        setAdminBusySlots(busyData || []);
+      }
 
-        } catch (err) {
-          console.error('Error fetching slots:', err);
-        }
-      };
-      fetchBookedAndBusySlots();
+    } catch (err) {
+      console.error('Error fetching slots:', err);
     }
+  };
+
+  useEffect(() => {
+    fetchBookedAndBusySlots();
+
+    // --- REAL-TIME SUBSCRIPTION ---
+    const channel = supabase
+      .channel('booking-slots-sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'bookings'
+        },
+        () => {
+          fetchBookedAndBusySlots();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [bookingData.date]);
 
   // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 30 นาที)
@@ -203,7 +226,7 @@ export default function Booking() {
 
   // --- Functions ---
 
-  // กรองและเรียงลำดับข้อมูล
+  //  กรองและเรียงลำดับข้อมูล
   const filteredPackages = packages
     .filter(pkg =>
       pkg.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -215,6 +238,19 @@ export default function Booking() {
       if (sortBy === 'rating') return b.rating - a.rating;
       return 0; // recommended (default order)
     });
+
+  // Pagination for services
+  const SERVICES_PER_PAGE = 5;
+  const totalServicesPages = Math.max(1, Math.ceil(filteredPackages.length / SERVICES_PER_PAGE));
+  const paginatedServices = useMemo(() => {
+    const start = (servicesPage - 1) * SERVICES_PER_PAGE;
+    return filteredPackages.slice(start, start + SERVICES_PER_PAGE);
+  }, [filteredPackages, servicesPage]);
+
+  // Reset to page 1 when search or sort changes
+  useEffect(() => {
+    setServicesPage(1);
+  }, [searchQuery, sortBy]);
 
   // เปิด Modal เพื่อเริ่มการจอง
   const handleOpenBooking = (pkg) => {
@@ -247,6 +283,7 @@ export default function Booking() {
     setSelectedPromotion(null);
     setBookingStep('select');
     setBookingData({ date: '', time: '', name: '', tel: '' });
+    setCreatedBooking(null);
   };
 
   // คำนวณราคาสุทธิ
@@ -287,7 +324,7 @@ export default function Booking() {
         .select('id')
         .eq('booking_date', bookingData.date)
         .eq('booking_time', bookingData.time)
-        .in('status', ['Pending', 'Confirmed'])
+        .in('status', ['Pending', 'Confirmed', 'Completed'])
         .maybeSingle();
 
       if (existing) {
@@ -298,7 +335,7 @@ export default function Booking() {
           .from('bookings')
           .select('booking_time')
           .eq('booking_date', bookingData.date)
-          .in('status', ['Pending', 'Confirmed']);
+          .in('status', ['Pending', 'Confirmed', 'Completed']);
         setBookedSlots(newData ? newData.map(b => b.booking_time) : []);
         return;
       }
@@ -342,22 +379,16 @@ export default function Booking() {
 
       if (error) throw error;
 
-      // 2) แจ้งเตือนไป LINE ผ่าน backend (ทำเป็นเบื้องหลังเพื่อไม่ให้ UI ค้าง)
-      fetch('http://localhost:3001/api/line/notify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          booking_id: data.id,
-          customer_name: bookingData.name || userProfile?.full_name || user.user_metadata?.name || '',
-          service_name: data.service_name,
-          booking_date: data.booking_date,
-          booking_time: data.booking_time,
-          price: data.price,
-          status: data.status,
-        }),
-      }).catch(err => console.warn('LINE Notify background error:', err));
+      // 2) เก็บข้อมูลคิวที่สร้างแล้ว เพื่อใช้ส่งแจ้งเตือนเมื่อผู้ใช้กด "จองเสร็จสิ้น"
+      setCreatedBooking({
+        id: data.id,
+        customer_name: bookingData.name || userProfile?.full_name || user.user_metadata?.name || '',
+        service_name: data.service_name,
+        booking_date: data.booking_date,
+        booking_time: data.booking_time,
+        price: data.price,
+        status: data.status,
+      });
 
       setBookingStep('success');
     } catch (error) {
@@ -366,6 +397,29 @@ export default function Booking() {
     } finally {
       setBookingInProgress(false);
     }
+  };
+
+  // เมื่อผู้ใช้กด "จองเสร็จสิ้น" ค่อยส่งแจ้งเตือนไปยัง LINE ว่ายืนยันการจองแล้ว
+  const handleFinishBooking = () => {
+    if (createdBooking) {
+      fetch('http://localhost:3001/api/line/notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          booking_id: createdBooking.id,
+          customer_name: createdBooking.customer_name,
+          service_name: createdBooking.service_name,
+          booking_date: createdBooking.booking_date,
+          booking_time: createdBooking.booking_time,
+          price: createdBooking.price,
+          status: createdBooking.status,
+        }),
+      }).catch(err => console.warn('LINE Notify background error:', err));
+    }
+
+    closeAll();
   };
 
   return (
@@ -487,66 +541,75 @@ export default function Booking() {
         )}
 
         {!loading && !error && packages.length > 0 && (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPackages.map((pkg) => (
-              <div key={pkg.id} className="bg-zinc-900 rounded-3xl p-4 shadow-xl hover:shadow-amber-500/10 transition-all duration-300 group border border-white/10 flex flex-col h-full hover:border-amber-500/30">
-                {/* Image Area */}
-                <div className="relative h-56 rounded-2xl overflow-hidden mb-4 bg-zinc-800">
-                  <img src={pkg.img} alt={pkg.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100" />
-                  <div className="absolute top-3 left-3 flex gap-2">
-                    {pkg.badge && (
-                      <span className={`${pkg.badgeColor} text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm`}>
-                        {pkg.badge}
-                      </span>
-                    )}
+          <>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {paginatedServices.map((pkg) => (
+                <div key={pkg.id} className="bg-zinc-900 rounded-3xl p-4 shadow-xl hover:shadow-amber-500/10 transition-all duration-300 group border border-white/10 flex flex-col h-full hover:border-amber-500/30">
+                  {/* Image Area */}
+                  <div className="relative h-56 rounded-2xl overflow-hidden mb-4 bg-zinc-800">
+                    <img src={pkg.img} alt={pkg.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100" />
+                    <div className="absolute top-3 left-3 flex gap-2">
+                      {pkg.badge && (
+                        <span className={`${pkg.badgeColor} text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider shadow-sm`}>
+                          {pkg.badge}
+                        </span>
+                      )}
+                    </div>
+                    <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1 text-xs font-bold shadow-sm border border-white/10">
+                      <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                      <span className="text-white font-num">{pkg.rating}</span>
+                      <span className="text-zinc-400 font-normal font-num">({pkg.reviews})</span>
+                    </div>
                   </div>
-                  <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1 text-xs font-bold shadow-sm border border-white/10">
-                    <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                    <span className="text-white font-num">{pkg.rating}</span>
-                    <span className="text-zinc-400 font-normal font-num">({pkg.reviews})</span>
-                  </div>
-                </div>
 
-                {/* Content Area */}
-                <div className="flex-grow flex flex-col">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="font-serif font-bold text-xl text-white leading-tight mb-1 group-hover:text-amber-500 transition-colors">{pkg.name}</h3>
-                      <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium">
-                        <span className="flex items-center gap-1 text-zinc-400"><Clock className="w-3 h-3 text-amber-500" /> <span className="font-num">{pkg.duration}</span> นาที</span>
-                        <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
-                        <span className="text-zinc-400">{pkg.category}</span>
+                  {/* Content Area */}
+                  <div className="flex-grow flex flex-col">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="font-serif font-bold text-xl text-white leading-tight mb-1 group-hover:text-amber-500 transition-colors">{pkg.name}</h3>
+                        <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium">
+                          <span className="flex items-center gap-1 text-zinc-400"><Clock className="w-3 h-3 text-amber-500" /> <span className="font-num">{pkg.duration}</span> นาที</span>
+                          <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
+                          <span className="text-zinc-400">{pkg.category}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <p className="text-zinc-400 text-sm leading-relaxed mb-4 line-clamp-2">{pkg.desc}</p>
+                    <p className="text-zinc-400 text-sm leading-relaxed mb-4 line-clamp-2">{pkg.desc}</p>
 
-                  <div className="flex flex-wrap gap-2 mb-6">
-                    {pkg.includes.map((item, i) => (
-                      <span key={i} className="text-[10px] font-bold bg-zinc-800 text-zinc-300 px-2 py-1 rounded-md border border-white/5">
-                        {item}
-                      </span>
-                    ))}
-                  </div>
-
-                  {/* Price & Action */}
-                  <div className="mt-auto flex items-center justify-between pt-4 border-t border-white/5">
-                    <div className="flex flex-col">
-                      {pkg.originalPrice && <span className="text-xs text-zinc-500 line-through decoration-zinc-600 font-num">฿{pkg.originalPrice}</span>}
-                      <span className="text-2xl font-bold text-amber-500 font-num">฿{pkg.price}</span>
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {pkg.includes.map((item, i) => (
+                        <span key={i} className="text-[10px] font-bold bg-zinc-800 text-zinc-300 px-2 py-1 rounded-md border border-white/5">
+                          {item}
+                        </span>
+                      ))}
                     </div>
-                    <button
-                      onClick={() => handleOpenBooking(pkg)}
-                      className="bg-white hover:bg-amber-500 hover:text-black text-black px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2 group/btn"
-                    >
-                      จองเลย <ChevronRight className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" />
-                    </button>
+
+                    {/* Price & Action */}
+                    <div className="mt-auto flex items-center justify-between pt-4 border-t border-white/5">
+                      <div className="flex flex-col">
+                        {pkg.originalPrice && <span className="text-xs text-zinc-500 line-through decoration-zinc-600 font-num">฿{pkg.originalPrice}</span>}
+                        <span className="text-2xl font-bold text-amber-500 font-num">฿{pkg.price}</span>
+                      </div>
+                      <button
+                        onClick={() => handleOpenBooking(pkg)}
+                        className="bg-white hover:bg-amber-500 hover:text-black text-black px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-lg active:scale-95 flex items-center gap-2 group/btn"
+                      >
+                        จองเลย <ChevronRight className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <Pagination
+              currentPage={servicesPage}
+              totalPages={totalServicesPages}
+              onPageChange={setServicesPage}
+              itemsPerPage={SERVICES_PER_PAGE}
+              totalItems={filteredPackages.length}
+            />
+          </>
         )}
       </main>
 
@@ -568,9 +631,14 @@ export default function Booking() {
                   {bookingStep === 'success' ? 'จองคิวสำเร็จ' : selectedPackage.name}
                 </h3>
               </div>
-              <button onClick={closeAll} className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white">
-                <X className="w-5 h-5" />
-              </button>
+              {bookingStep !== 'success' && (
+                <button
+                  onClick={closeAll}
+                  className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
             </div>
 
             {/* Modal Body */}
@@ -621,22 +689,31 @@ export default function Booking() {
                             return slot >= busy.start_time.slice(0, 5) && slot <= busy.end_time.slice(0, 5);
                           });
 
+                          // --- PAST TIME CHECK ---
+                          const now = new Date();
+                          const todayStr = now.toLocaleDateString('en-CA');
+                          const isToday = bookingData.date === todayStr;
+                          const currentH = now.getHours();
+                          const currentM = now.getMinutes();
+                          const currentTimeStr = `${currentH.toString().padStart(2, '0')}:${currentM.toString().padStart(2, '0')}`;
+                          const isPast = isToday && slot <= currentTimeStr;
+
                           return (
                             <button
                               key={slot}
                               type="button"
-                              disabled={isBooked || isAdminBusy}
+                              disabled={isBooked || isAdminBusy || isPast}
                               onClick={() => setBookingData({ ...bookingData, time: slot })}
                               className={`py-2.5 rounded-xl text-sm font-num font-bold transition-all border ${bookingData.time === slot
                                 ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] scale-105'
-                                : isAdminBusy
-                                  ? 'bg-red-500/10 text-red-500 border-red-500/20 cursor-not-allowed opacity-40'
-                                  : isBooked
-                                    ? 'bg-amber-500/10 text-amber-500/50 border-amber-500/20 cursor-not-allowed opacity-40'
+                                : (isAdminBusy || isBooked)
+                                  ? 'bg-zinc-800/50 text-zinc-600 border-white/5 cursor-not-allowed opacity-40'
+                                  : isPast
+                                    ? 'bg-orange-500/10 text-orange-500 border-orange-500/20 cursor-not-allowed opacity-60'
                                     : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
                                 }`}
                             >
-                              {isAdminBusy ? 'ไม่ว่าง' : slot}
+                              {isAdminBusy ? 'ไม่ว่าง' : (isPast && !isBooked) ? 'เกินเวลาจอง' : slot}
                             </button>
                           );
                         })}
@@ -718,7 +795,7 @@ export default function Booking() {
                   </div>
                   <h4 className="text-3xl font-serif font-bold text-white mb-3 tracking-tight">จองคิวสำเร็จ!</h4>
                   <p className="text-zinc-400 text-sm max-w-xs mx-auto mb-8 leading-relaxed">
-                    ขอบคุณที่ใช้บริการครับ เราจะส่งข้อความแจ้งเตือนไปยัง LINE ของคุณเมื่อใกล้ถึงคิวครับ
+                    ขอบคุณที่ใช้บริการครับ เมื่อกดปุ่ม "จองเสร็จสิ้น" ระบบจะส่งข้อความยืนยันการจองไปยัง LINE ของคุณครับ
                   </p>
 
                   <div className="relative group">
@@ -770,7 +847,7 @@ export default function Booking() {
             {bookingStep === 'success' && (
               <div className="p-6 border-t border-white/10 bg-zinc-900">
                 <button
-                  onClick={closeAll}
+                  onClick={handleFinishBooking}
                   className="w-full bg-amber-500 text-black py-4 rounded-xl font-bold hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 text-lg"
                 >
                   จองเสร็จสิ้น

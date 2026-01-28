@@ -1,6 +1,7 @@
 import { useRef, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "../supabase/client";
 import { AuthContext } from "../context/AuthContext";
+import Pagination from "../components/Pagination";
 import {
   User, Mail, Phone, MapPin, Edit2,
   History, Calendar, Clock, Scissors,
@@ -63,6 +64,7 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [filterType, setFilterType] = useState('All'); // ตัวเลือกกรอง: All, Upcoming, History
   const [bookings, setBookings] = useState([]); // New state for bookings
+  const [historyPage, setHistoryPage] = useState(1); // Pagination for history
 
   const fetchProfile = useCallback(async () => {
     if (!user) return;
@@ -123,6 +125,7 @@ export default function Profile() {
     address: "",
     avatar: "/default-avatar.png"
   });
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   const [formData, setFormData] = useState(profile);
 
@@ -333,13 +336,26 @@ export default function Profile() {
     });
   }, [bookings, filterType]);
 
+  // Pagination for history
+  const ITEMS_PER_PAGE = 5;
+  const totalHistoryPages = Math.max(1, Math.ceil(pastBookings.length / ITEMS_PER_PAGE));
+  const paginatedPastBookings = useMemo(() => {
+    const start = (historyPage - 1) * ITEMS_PER_PAGE;
+    return pastBookings.slice(start, start + ITEMS_PER_PAGE);
+  }, [pastBookings, historyPage]);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [filterType]);
+
   // --- Handlers ---
-  const handleLogout = async () => {
-    if (window.confirm("ยืนยันการออกจากระบบ?")) {
-      await logout();
-      // Navigate will be handled by ProtectedRoute or can be done explicitly
-    }
-  };
+  // const handleLogout = async () => {
+  //   if (window.confirm("ยืนยันการออกจากระบบ?")) {
+  //     await logout();
+  //     // Navigate will be handled by ProtectedRoute or can be done explicitly
+  //   }
+  // };
 
   const handleEditClick = () => {
     setFormData(profile);
@@ -384,21 +400,68 @@ export default function Profile() {
   };
 
   const handleAvatarClick = () => {
-    fileInputRef.current.click();
+    if (!avatarUploading) {
+      fileInputRef.current.click();
+    }
   };
 
-  const handleFileChange = (event) => {
-    // TODO: Implement Supabase storage upload
+  const handleFileChange = async (event) => {
     const file = event.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const newAvatar = reader.result;
-        setProfile(prev => ({ ...prev, avatar: newAvatar }));
-        setFormData(prev => ({ ...prev, avatar: newAvatar }));
-      };
-      reader.readAsDataURL(file);
-      showNotification("อัปเดตรูปโปรไฟล์เรียบร้อย (ตัวอย่าง)", "success");
+    if (!file || !user) return;
+
+    setAvatarUploading(true);
+    try {
+      // ใช้ user.id + เวลา เพื่อให้ชื่อไฟล์ไม่ซ้ำ
+      // บรรทัดที่ 421-423 เดิม
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const filePath = fileName; // *** เปลี่ยนจาก `avatars/${fileName}` เป็น fileName เฉยๆ ***
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars') // ระบุชื่อ Bucket ที่นี่แล้ว
+        .upload(filePath, file, { // filePath ไม่ต้องมีชื่อ bucket ซ้ำ
+          upsert: true,
+          cacheControl: '3600',
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicUrlData?.publicUrl;
+      if (!publicUrl) {
+        throw new Error('ไม่สามารถสร้าง URL ของรูปโปรไฟล์ได้');
+      }
+
+      // อัปเดตตาราง profiles
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          avatar_url: publicUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+
+      if (profileError) {
+        throw profileError;
+      }
+
+      // อัปเดต state ในหน้าให้แสดงรูปใหม่ทันที
+      setProfile(prev => ({ ...prev, avatar: publicUrl }));
+      setFormData(prev => ({ ...prev, avatar: publicUrl }));
+
+      showNotification("อัปเดตรูปโปรไฟล์เรียบร้อยแล้ว!", "success");
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      showNotification("ไม่สามารถอัปโหลดรูปโปรไฟล์ได้: " + error.message, "error");
+    } finally {
+      setAvatarUploading(false);
+      // reset input value เพื่อให้เลือกไฟล์เดิมซ้ำได้ถ้าต้องการ
+      event.target.value = '';
     }
   };
 
@@ -636,12 +699,12 @@ export default function Profile() {
             </div>
           )}
 
-          <button
+          {/* <button
             onClick={handleLogout}
             className="flex items-center gap-2 px-6 py-3 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl transition-all duration-300 border border-red-600/20 font-bold text-sm"
           >
             <LogOut size={18} /> ออกจากระบบ
-          </button>
+          </button> */}
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -784,7 +847,16 @@ export default function Profile() {
                     <div className="w-10 h-10 border-2 border-white/10 border-t-zinc-500 rounded-full animate-spin"></div>
                   </div>
                 ) : pastBookings.length > 0 ? (
-                  pastBookings.map((booking) => renderBookingItem(booking))
+                  <>
+                    {paginatedPastBookings.map((booking) => renderBookingItem(booking))}
+                    <Pagination
+                      currentPage={historyPage}
+                      totalPages={totalHistoryPages}
+                      onPageChange={setHistoryPage}
+                      itemsPerPage={ITEMS_PER_PAGE}
+                      totalItems={pastBookings.length}
+                    />
+                  </>
                 ) : (
                   <div className="py-12 text-center bg-zinc-950/30 rounded-2xl border border-dashed border-white/5">
                     <p className="text-zinc-500 text-sm italic">ไม่พบประวัติการจอง</p>

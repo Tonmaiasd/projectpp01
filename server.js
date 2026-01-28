@@ -409,7 +409,7 @@ app.post('/api/delete-holiday', async (req, res) => {
   }
 });
 
-// Endpoint: เลื่อนคิวจองและแจ้งเตือน LINE
+// Endpoint: เลื่อนคิวจองและแจ้งเตือน LINE (Client Request)
 app.post('/api/reschedule-booking', async (req, res) => {
   const { bookingId, newDate, newTime, oldDate, oldTime, serviceName } = req.body;
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -446,6 +446,48 @@ app.post('/api/reschedule-booking', async (req, res) => {
     res.json({ success: true, message: 'เลื่อนคิวจองและแจ้งเตือนเรียบร้อยแล้ว' });
   } catch (err) {
     console.error('Error in /api/reschedule-booking:', err.message);
+    res.status(500).json({ error: 'Failed to reschedule booking: ' + err.message });
+  }
+});
+
+// Endpoint: เลื่อนคิวโดย ADMIN (Admin Reschedule)
+app.post('/api/admin-reschedule-booking', async (req, res) => {
+  const { bookingId, newDate, newTime, oldDate, oldTime, serviceName } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!bookingId || !newDate || !newTime) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 1. Update Booking (เลื่อนวัน/เวลาเท่านั้น ไม่แตะต้องสถานะ)
+    const { data: booking, error: updateError } = await supabaseAdmin
+      .from('bookings')
+      .update({
+        booking_date: newDate,
+        booking_time: newTime
+      })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // 2. Send LINE Notification (ข้อความสำหรับ Admin เป็นคนเลื่อน)
+    const formattedOldDate = new Date(oldDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+    const formattedNewDate = new Date(newDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+
+    // ข้อความที่ระบุว่า Admin เป็นคนเลื่อน
+    const msg = `📢 แจ้งเตือนจากทางร้าน: เลื่อนคิวการจองครับ\n\nบริการ: ${serviceName}\n\n📅 เดิม: ${formattedOldDate} (${oldTime.slice(0, 5)} น.)\n➡️ ใหม่: ${formattedNewDate} (${newTime.slice(0, 5)} น.)\n\n(ดำเนินการโดย Admin) หากลูกค้าไม่สะดวกในเวลาใหม่ กรุณาติดต่อร้านค้าครับ 🙏`;
+
+    await sendLineNotification(supabaseAdmin, booking, msg);
+
+    res.json({ success: true, message: 'Admin เลื่อนคิวและแจ้งเตือนเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('Error in /api/admin-reschedule-booking:', err.message);
     res.status(500).json({ error: 'Failed to reschedule booking: ' + err.message });
   }
 });
