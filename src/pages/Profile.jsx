@@ -46,11 +46,13 @@ export default function Profile() {
   const [bookingToCancel, setBookingToCancel] = useState(null);
   const [cancelLoading, setCancelLoading] = useState(false);
 
+  // --- Save Confirmation State ---
+  const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
   const showNotification = (message, type = 'info') => {
     setNotification({ show: true, message, type });
-    if (type === 'success') {
-      setTimeout(() => setNotification(prev => ({ ...prev, show: false })), 3000);
-    }
+    // ไม่ auto close เพื่อให้ user อ่านข้อความได้ชัดเจน
   };
 
   useEffect(() => {
@@ -362,63 +364,83 @@ export default function Profile() {
     setIsEditing(true);
   };
 
+  // ฟังก์ชันเปิด modal ยืนยันการบันทึก
+  const handleSaveClick = () => {
+    const phone = (formData.phone || '').toString().trim();
+
+    // Validate phone length and digits
+    if (phone && !/^\d{10}$/.test(phone)) {
+      showNotification('เบอร์โทรต้องเป็นตัวเลข 10 หลักเท่านั้น', 'error');
+      return;
+    }
+
+    // เปิด modal ยืนยัน
+    setShowSaveConfirmModal(true);
+  };
+
+  // ฟังก์ชันบันทึกข้อมูลจริง
   const handleSave = async () => {
+    setIsSaving(true);
     try {
       const phone = (formData.phone || '').toString().trim();
 
-      // Validate phone length and digits
-      if (phone && !/^\d{10}$/.test(phone)) {
-        showNotification('เบอร์โทรต้องเป็นตัวเลข 10 หลักเท่านั้น', 'error');
-        return;
-      }
-
-      // Check uniqueness: ไม่มีใครใช้เบอร์นี้ ยกเว้นตัวเอง
-      if (phone) {
-        const { data: existing, error: existError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('phone', phone)
-          .neq('id', user.id)
-          .maybeSingle();
-
-        if (existError) {
-          console.warn('phone uniqueness check failed', existError.message);
-        }
-
-        if (existing) {
-          showNotification('เบอร์โทรนี้ถูกใช้งานแล้วโดยผู้ใช้รายอื่น', 'error');
-          return;
-        }
-      }
-
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      // ส่งคำขอไปที่ Server API เพื่ออัปเดตข้อมูลและเบอร์โทร Login
+      const response = await fetch('http://localhost:3001/api/user-update-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          phone: phone,
           full_name: formData.fullName,
-          phone: phone || null,
-          address: formData.address,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id);
-
-      if (error) throw error;
-
-      // Also update user_metadata in auth.users if needed
-      const { error: userUpdateError } = await supabase.auth.updateUser({
-        data: {
-          name: formData.fullName,
-          phone: phone || null,
-        }
+          address: formData.address
+        }),
       });
 
-      if (userUpdateError) throw userUpdateError;
+      const result = await response.json();
 
-      setProfile({ ...formData, phone });
+      if (!response.ok) {
+        throw new Error(result.error || 'Server error');
+      }
+
+      // Success - อัปเดตข้อมูลในหน้าจอ
+      const updatedData = result.data;
+
+      // ตรวจสอบว่ามีการเปลี่ยนเบอร์โทรหรือไม่ (ก่อนอัปเดต state)
+      const phoneChanged = profile.phone !== updatedData.phone;
+
+      setProfile({
+        ...profile,
+        fullName: updatedData.full_name,
+        phone: updatedData.phone,
+        address: updatedData.address
+      });
+      setFormData(prev => ({
+        ...prev,
+        fullName: updatedData.full_name,
+        phone: updatedData.phone,
+        address: updatedData.address
+      }));
+
       setIsEditing(false);
-      showNotification('บันทึกข้อมูลเรียบร้อย!', 'success');
+      setShowSaveConfirmModal(false);
+
+      // แสดงข้อความตามการเปลี่ยนแปลง
+      if (phoneChanged) {
+        showNotification(
+          'บันทึกข้อมูลสำเร็จ!\n\nกรุณาใช้เบอร์โทรศัพท์ใหม่ในการ Login ครั้งถัดไป',
+          'success'
+        );
+      } else {
+        showNotification('บันทึกข้อมูลเรียบร้อย!', 'success');
+      }
     } catch (error) {
-      showNotification('Error saving profile: ' + (error?.message || error), 'error');
+      setShowSaveConfirmModal(false);
+      showNotification('เกิดข้อผิดพลาด: ' + (error?.message || error), 'error');
       console.error('Error saving profile:', error);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -980,13 +1002,64 @@ export default function Profile() {
                 ยกเลิก
               </button>
               <button
-                onClick={handleSave}
+                onClick={handleSaveClick}
                 className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2"
               >
                 <Save size={18} /> บันทึก
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* --- Save Confirmation Modal --- */}
+      {showSaveConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl p-8 text-center animate-[slideUp_0.3s_ease-out]">
+            <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertCircle size={40} />
+            </div>
+
+            <h3 className="text-2xl font-serif font-bold text-white mb-2">ยืนยันการบันทึก?</h3>
+            <p className="text-zinc-400 text-sm mb-2 leading-relaxed">
+              คุณต้องการบันทึกข้อมูลส่วนตัวใหม่ใช่หรือไม่?
+            </p>
+            {profile.phone !== formData.phone && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 mt-4">
+                <p className="text-amber-500 text-xs font-bold leading-relaxed">
+                  ⚠️ คุณได้เปลี่ยนเบอร์โทรศัพท์<br />
+                  กรุณาใช้เบอร์ใหม่ในการ Login ครั้งถัดไป
+                </p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-3 mt-6">
+              <button
+                disabled={isSaving}
+                onClick={handleSave}
+                className="w-full py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
+                    <span>กำลังบันทึก...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    ยืนยันการบันทึก
+                  </>
+                )}
+              </button>
+              <button
+                disabled={isSaving}
+                onClick={() => setShowSaveConfirmModal(false)}
+                className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
+              >
+                ยกเลิก
+              </button>
+            </div>
           </div>
         </div>
       )}

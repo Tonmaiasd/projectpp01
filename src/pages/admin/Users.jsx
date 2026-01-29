@@ -69,42 +69,39 @@ export default function UsersPage() {
         return;
       }
 
-      // Check uniqueness among other users
-      if (phone) {
-        const { data: existing, error: existError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('phone', phone)
-          .neq('id', editingUser.id)
-          .maybeSingle();
+      // ส่งคำขอไปที่ Server API เพื่ออัปเดตทั้ง Auth และ Profile
+      const response = await fetch('http://localhost:3001/api/admin-update-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: editingUser.id,
+          phone: phone,
+          full_name: formData.full_name,
+          address: formData.address
+        }),
+      });
 
-        if (existError) {
-          console.warn('phone uniqueness check failed', existError.message);
-        }
+      const result = await response.json();
 
-        if (existing) {
-          showNotify('เบอร์โทรนี้ถูกใช้งานแล้วโดยผู้ใช้รายอื่น', 'error');
-          return;
-        }
+      if (!response.ok) {
+        throw new Error(result.error || 'Server error');
       }
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .update({
-          full_name: formData.full_name || null,
-          phone: phone || null,
-          address: formData.address || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editingUser.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      setUsers(users.map(u => u.id === editingUser.id ? data : u));
+      // Success
+      setUsers(users.map(u => u.id === editingUser.id ? result.data : u));
       setEditingUser(null);
-      showNotify('บันทึกข้อมูลเรียบร้อยแล้ว', 'success');
+
+      // แสดงข้อความตามว่ามีการเปลี่ยนเบอร์หรือไม่
+      if (result.phoneChanged) {
+        showNotify('บันทึกข้อมูลสำเร็จและส่งการแจ้งเตือนไปยัง LINE ของผู้ใช้แล้ว', 'success');
+      } else {
+        showNotify('บันทึกข้อมูลเรียบร้อยแล้ว', 'success');
+      }
+
     } catch (err) {
+      console.error('Error saving user:', err);
       showNotify('บันทึกข้อมูลไม่สำเร็จ: ' + err.message, 'error');
     }
   };

@@ -638,6 +638,193 @@ app.post('/webhook', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// Endpoint: User แก้ไขข้อมูลตัวเอง (เปลี่ยนเบอร์โทร Login)
+app.post('/api/user-update-profile', async (req, res) => {
+  const { userId, phone, full_name, address } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!userId || !phone) {
+    return res.status(400).json({ error: 'Missing userId or phone' });
+  }
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 1. ตรวจสอบว่าเบอร์ใหม่ซ้ำหรือไม่ (ใน profiles)
+    const { data: existing, error: existError } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('phone', phone)
+      .neq('id', userId)
+      .maybeSingle();
+
+    if (existing) {
+      return res.status(400).json({ error: 'เบอร์โทรนี้ถูกใช้งานแล้วโดยผู้ใช้รายอื่น' });
+    }
+
+    // 2. อัปเดตข้อมูลใน Auth User (เปลี่ยน Email และ Metadata)
+    const newEmail = `${phone}@phone.local`;
+
+    // update email and metadata
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      {
+        email: newEmail,
+        user_metadata: {
+          name: full_name,
+          phone: phone
+        }
+      }
+    );
+
+    if (authError) {
+      console.error('Error updating auth user:', authError);
+      return res.status(500).json({ error: 'ไม่สามารถอัปเดตข้อมูลการล็อกอินได้: ' + authError.message });
+    }
+
+    // 3. อัปเดตข้อมูลในตาราง Profiles (public schema)
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        full_name: full_name || null,
+        phone: phone || null,
+        address: address || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (profileError) {
+      console.error('Error updating profile:', profileError);
+      return res.status(500).json({ error: 'อัปเดตข้อมูล Login สำเร็จ แต่ข้อมูลส่วนตัวไม่บันทึก: ' + profileError.message });
+    }
+
+    res.json({ success: true, message: 'บันทึกข้อมูลและเบอร์โทรเข้าระบบเรียบร้อยแล้ว', data: profileData });
+
+  } catch (err) {
+    console.error('Error in /api/user-update-profile:', err.message);
+    res.status(500).json({ error: 'Internal Server Error: ' + err.message });
+  }
+});
+
+// Endpoint: Admin แก้ไขข้อมูล User (เปลี่ยนเบอร์โทร Login)
+app.post('/api/admin-update-user', async (req, res) => {
+  const { userId, phone, full_name, address } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!userId || !phone) {
+    return res.status(400).json({ error: 'Missing userId or phone' });
+  }
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 0. ดึงข้อมูลเดิมก่อนเพื่อเช็คว่ามีการเปลี่ยนเบอร์หรือไม่
+    const { data: oldProfile, error: oldProfileError } = await supabaseAdmin
+      .from('profiles')
+      .select('phone, full_name, line_user_id')
+      .eq('id', userId)
+      .single();
+
+    if (oldProfileError) {
+      return res.status(404).json({ error: 'ไม่พบข้อมูลผู้ใช้' });
+    }
+
+    const phoneChanged = oldProfile.phone !== phone;
+
+    // 1. ตรวจสอบว่าเบอร์ใหม่ซ้ำหรือไม่ (ใน profiles)
+    const { data: existing, error: existError } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('phone', phone)
+      .neq('id', userId)
+      .maybeSingle();
+
+    if (existing) {
+      return res.status(400).json({ error: 'เบอร์โทรนี้ถูกใช้งานแล้วโดยผู้ใช้รายอื่น' });
+    }
+
+    // 2. อัปเดตข้อมูลใน Auth User (เปลี่ยน Email)
+    // Format email ใหม่: phone@phone.local
+    const newEmail = `${phone}@phone.local`;
+
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      { email: newEmail }
+    );
+
+    if (authError) {
+      console.error('Error updating auth user:', authError);
+      return res.status(500).json({ error: 'ไม่สามารถอัปเดตข้อมูลการล็อกอินได้: ' + authError.message });
+    }
+
+    // 3. อัปเดตข้อมูลในตาราง Profiles (public schema)
+    const { data: profileData, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        full_name: full_name || null,
+        phone: phone || null,
+        address: address || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
+      .select()
+      .single();
+
+    if (profileError) {
+      console.error('Error updating profile:', profileError);
+      return res.status(500).json({ error: 'อัปเดตข้อมูล Login สำเร็จ แต่ข้อมูลส่วนตัวไม่บันทึก: ' + profileError.message });
+    }
+
+    // 4. ส่งการแจ้งเตือนไปยัง LINE ถ้ามีการเปลี่ยนเบอร์และมี line_user_id
+    if (phoneChanged && oldProfile.line_user_id && LINE_CHANNEL_ACCESS_TOKEN) {
+      try {
+        const userName = full_name || oldProfile.full_name || 'คุณลูกค้า';
+        const message = {
+          to: oldProfile.line_user_id,
+          messages: [
+            {
+              type: 'text',
+              text: `🔔 แจ้งเตือนจากแอดมิน\n\n` +
+                `สวัสดีครับคุณ ${userName} 👋\n\n` +
+                `แอดมินได้ทำการแก้ไขเบอร์โทรศัพท์ของคุณเป็น:\n` +
+                `📱 ${phone}\n\n` +
+                `⚠️ สำคัญ: กรุณาใช้เบอร์โทรศัพท์ใหม่นี้ในการ Login ครั้งถัดไปครับ\n\n` +
+                `ขอบคุณที่ใช้บริการ Lor Loei Cuts 🙏`
+            }
+          ]
+        };
+
+        await axios.post(LINE_PUSH_API, message, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`
+          }
+        });
+
+        console.log(`✅ Sent phone change notification to LINE user: ${oldProfile.line_user_id}`);
+      } catch (lineError) {
+        console.error('❌ Failed to send LINE notification:', lineError.message);
+        // ไม่ให้ error ของ LINE ขัดขวางการอัปเดตข้อมูล
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'บันทึกข้อมูลและเบอร์โทรเข้าระบบเรียบร้อยแล้ว' + (phoneChanged ? ' และส่งการแจ้งเตือนไปยัง LINE แล้ว' : ''),
+      data: profileData,
+      phoneChanged: phoneChanged
+    });
+
+  } catch (err) {
+    console.error('Error in /api/admin-update-user:', err.message);
+    res.status(500).json({ error: 'Internal Server Error: ' + err.message });
+  }
+});
+
 app.get('/', (_req, res) => {
   res.send('LINE messaging API server running');
 });
