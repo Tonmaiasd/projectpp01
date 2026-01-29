@@ -14,6 +14,10 @@ export default function Promotions() {
   const [currentPromo, setCurrentPromo] = useState(null); // null = Add, object = Edit
   const [promotionsPage, setPromotionsPage] = useState(1); // Pagination
 
+  // Delete Confirmation State
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+
   // Form State
   const [formData, setFormData] = useState({
     title: '',
@@ -93,13 +97,22 @@ export default function Promotions() {
     setIsModalOpen(true);
   };
 
-  // Delete Promotion
-  const handleDelete = async (id) => {
-    if (!window.confirm("คุณต้องการลบโปรโมชั่นนี้ใช่หรือไม่?")) return;
+  // Pre-Delete: Open Confirmation Modal
+  const handleClickDelete = (id) => {
+    setDeleteId(id);
+    setIsDeleteModalOpen(true);
+  };
+
+  // Execute Delete
+  const handleConfirmDelete = async () => {
+    if (!deleteId) return;
     try {
-      const { error } = await supabase.from('promotions').delete().eq('id', id);
+      const { error } = await supabase.from('promotions').delete().eq('id', deleteId);
       if (error) throw error;
-      setPromotions(promotions.filter(p => p.id !== id));
+      setPromotions(promotions.filter(p => p.id !== deleteId));
+      showNotification('ลบโปรโมชั่นเรียบร้อย', 'success');
+      setIsDeleteModalOpen(false);
+      setDeleteId(null);
     } catch (err) {
       showNotification('ลบโปรโมชั่นไม่สำเร็จ: ' + err.message, 'error');
     }
@@ -158,15 +171,14 @@ export default function Promotions() {
 
       {/* Notification Card */}
       {notification && (
-        <div className={`p-4 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-300 flex items-center gap-3 ${
-          notification.type === 'success' 
+        <div className={`p-4 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-300 flex items-center gap-3 ${notification.type === 'success'
             ? 'bg-green-500/10 border-green-500/30 text-green-400'
             : notification.type === 'error'
-            ? 'bg-red-500/10 border-red-500/30 text-red-400'
-            : notification.type === 'warning'
-            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-            : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
-        }`}>
+              ? 'bg-red-500/10 border-red-500/30 text-red-400'
+              : notification.type === 'warning'
+                ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+                : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+          }`}>
           <div className="text-xl">
             {notification.type === 'success' && '✓'}
             {notification.type === 'error' && '✕'}
@@ -243,7 +255,7 @@ export default function Promotions() {
                     <Edit3 size={16} />
                   </button>
                   <button
-                    onClick={() => handleDelete(promo.id)}
+                    onClick={() => handleClickDelete(promo.id)}
                     className="p-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-500 transition-colors"
                     title="ลบ"
                   >
@@ -345,6 +357,38 @@ export default function Promotions() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- DELETE CONFIRMATION MODAL --- */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-white/10 shadow-2xl p-6 animate-[slideUp_0.3s_ease-out]">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">ยืนยันการลบ?</h3>
+              <p className="text-zinc-400 text-sm">
+                คุณต้องการลบโปรโมชั่นนี้ใช่หรือไม่?<br />
+                การกระทำนี้ไม่สามารถย้อนกลับได้
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="flex-1 py-3 bg-red-500 hover:bg-red-400 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-500/20"
+              >
+                ยืนยันลบ
+              </button>
+            </div>
           </div>
         </div>
       )}

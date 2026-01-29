@@ -23,6 +23,7 @@ export default function Booking() {
   // Data states
   const [packages, setPackages] = useState([]);
   const [promotions, setPromotions] = useState([]);
+  const [usedPromoCodes, setUsedPromoCodes] = useState([]);
   const [selectedPromotion, setSelectedPromotion] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -191,7 +192,12 @@ export default function Booking() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setPromotions(data || []);
+
+      // Filter out expired promotions (Client-side double check)
+      const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+      const validPromotions = (data || []).filter(p => !p.expire_date || p.expire_date >= todayStr);
+
+      setPromotions(validPromotions);
     } catch (err) {
       console.error('Error fetching promotions:', err);
     }
@@ -222,6 +228,31 @@ export default function Booking() {
     };
 
     fetchUserProfile();
+  }, [user]);
+
+  // Fetch used promotions
+  useEffect(() => {
+    if (!user) {
+      setUsedPromoCodes([]);
+      return;
+    }
+    const fetchUsedPromos = async () => {
+      try {
+        const { data } = await supabase
+          .from('bookings')
+          .select('applied_promo')
+          .eq('user_id', user.id)
+          .neq('status', 'Cancelled')
+          .not('applied_promo', 'is', null);
+
+        if (data) {
+          setUsedPromoCodes(data.map(d => d.applied_promo));
+        }
+      } catch (err) {
+        console.error('Error fetching used promos:', err);
+      }
+    };
+    fetchUsedPromos();
   }, [user]);
 
   // --- Functions ---
@@ -358,6 +389,27 @@ export default function Booking() {
         return;
       }
 
+      // --- PROMOTION USAGE CHECK (1 Time per Promotion per User) ---
+      if (selectedPromotion) {
+        const { data: usedPromo, error: promoError } = await supabase
+          .from('bookings')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('applied_promo', selectedPromotion.code)
+          .neq('status', 'Cancelled')
+          .maybeSingle();
+
+        if (promoError) {
+          console.error('Error checking promotion usage:', promoError);
+        }
+
+        if (usedPromo) {
+          showNotification(`คุณเคยใช้โปรโมชั่น "${selectedPromotion.code}" ไปแล้ว (จำกัด 1 ครั้งต่อท่าน)`, "warning");
+          setBookingInProgress(false);
+          return;
+        }
+      }
+
       // 1) บันทึกลง Supabase
       const { data, error } = await supabase
         .from('bookings')
@@ -421,6 +473,16 @@ export default function Booking() {
 
     closeAll();
   };
+
+  // Auto-deselect promotion if booking date changes to be after promotion expiry
+  useEffect(() => {
+    if (selectedPromotion && selectedPromotion.expire_date && bookingData.date) {
+      if (selectedPromotion.expire_date < bookingData.date) {
+        setSelectedPromotion(null);
+        showNotification(`โปรโมชั่น ${selectedPromotion.code} หมดเขตก่อนวันที่คุณเลือก`, 'warning');
+      }
+    }
+  }, [bookingData.date, selectedPromotion]);
 
   return (
     // เพิ่ม pt-24 เพื่อดันเนื้อหาลงมาให้พ้น Navbar หลัก
@@ -756,32 +818,60 @@ export default function Booking() {
                         <div className="text-xs opacity-70">จองราคาปกติ</div>
                       </button>
 
-                      {promotions.map((promo) => (
-                        <button
-                          key={promo.id}
-                          type="button"
-                          onClick={() => setSelectedPromotion(promo)}
-                          className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden ${selectedPromotion?.id === promo.id
-                            ? 'bg-amber-500 text-black border-amber-500 shadow-lg'
-                            : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50'
-                            }`}
-                        >
-                          <div className="flex justify-between items-center relative z-10">
-                            <div>
-                              <div className="font-bold flex items-center gap-2">
-                                {promo.title}
-                                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${selectedPromotion?.id === promo.id ? 'bg-black/20 border-black/20' : 'bg-amber-500/10 border-amber-500/20 text-amber-500'}`}>
-                                  {promo.code}
-                                </span>
+                      {promotions.map((promo) => {
+                        const isUsed = usedPromoCodes.includes(promo.code);
+                        // Check if promo expires before the selected booking date
+                        // promo.expire_date is YYYY-MM-DD, bookingData.date is YYYY-MM-DD
+                        const isExpiredForDate = promo.expire_date && promo.expire_date < bookingData.date;
+
+                        const isDisabled = isUsed || isExpiredForDate;
+
+                        return (
+                          <button
+                            key={promo.id}
+                            type="button"
+                            disabled={isDisabled}
+                            onClick={() => !isDisabled && setSelectedPromotion(promo)}
+                            className={`p-4 rounded-2xl border text-left transition-all relative overflow-hidden ${isDisabled
+                              ? 'opacity-40 cursor-not-allowed bg-zinc-900 border-white/5 grayscale saturate-0'
+                              : selectedPromotion?.id === promo.id
+                                ? 'bg-amber-500 text-black border-amber-500 shadow-lg'
+                                : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50'
+                              }`}
+                          >
+                            {isUsed && (
+                              <div className="absolute top-2 right-2 px-2 py-0.5 bg-zinc-700 text-zinc-400 text-[10px] rounded-full font-bold">
+                                ใช้แล้ว
                               </div>
-                              <div className="text-xs mt-1 opacity-80">{promo.discount_text}</div>
+                            )}
+                            {isExpiredForDate && !isUsed && (
+                              <div className="absolute top-2 right-2 px-2 py-0.5 bg-red-500/20 text-red-500 text-[10px] rounded-full font-bold border border-red-500/20">
+                                หมดเขตก่อนวันจอง
+                              </div>
+                            )}
+                            <div className="flex justify-between items-center relative z-10">
+                              <div>
+                                <div className="font-bold flex items-center gap-2">
+                                  {promo.title}
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${selectedPromotion?.id === promo.id ? 'bg-black/20 border-black/20' : 'bg-amber-500/10 border-amber-500/20 text-amber-500'}`}>
+                                    {promo.code}
+                                  </span>
+                                </div>
+                                <div className="text-xs mt-1 opacity-80">{promo.discount_text}</div>
+                                {promo.expire_date && (
+                                  <div className={`text-[10px] mt-1 ${isExpiredForDate ? 'text-red-500 font-bold' : 'opacity-60'}`}>
+                                    หมดเขต: {promo.expire_date}
+                                  </div>
+                                )}
+                              </div>
+                              <div className={`text-lg font-bold ${selectedPromotion?.id === promo.id ? 'text-black' : 'text-amber-500'}`}>
+                                {promo.discount_text}
+                              </div>
                             </div>
-                            <div className={`text-lg font-bold ${selectedPromotion?.id === promo.id ? 'text-black' : 'text-amber-500'}`}>
-                              {promo.discount_text}
-                            </div>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      })}
+
                     </div>
                   </div>
                 </div>
@@ -817,78 +907,85 @@ export default function Booking() {
             </div>
 
             {/* Modal Footer (Action Buttons) */}
-            {bookingStep === 'select' && (
-              <div className="p-6 border-t border-white/10 bg-zinc-900">
-                <div className="flex justify-between items-center mb-4">
-                  <div className="flex flex-col">
-                    <span className="text-zinc-400 text-xs">ยอดรวมทั้งสิ้น</span>
-                    {selectedPromotion && (
-                      <span className="text-zinc-500 text-[10px] line-through decoration-zinc-600">฿{selectedPackage.price}</span>
-                    )}
+            {
+              bookingStep === 'select' && (
+                <div className="p-6 border-t border-white/10 bg-zinc-900">
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="flex flex-col">
+                      <span className="text-zinc-400 text-xs">ยอดรวมทั้งสิ้น</span>
+                      {selectedPromotion && (
+                        <span className="text-zinc-500 text-[10px] line-through decoration-zinc-600">฿{selectedPackage.price}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end">
+                      <span className="text-2xl font-bold text-amber-500 font-num">฿{finalPrice}</span>
+                      {selectedPromotion && (
+                        <span className="text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-full mt-1">
+                          ประหยัดไป {selectedPackage.price - finalPrice} บาท
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-2xl font-bold text-amber-500 font-num">฿{finalPrice}</span>
-                    {selectedPromotion && (
-                      <span className="text-[10px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded-full mt-1">
-                        ประหยัดไป {selectedPackage.price - finalPrice} บาท
-                      </span>
-                    )}
-                  </div>
+                  <button
+                    onClick={confirmBooking}
+                    disabled={bookingInProgress}
+                    className="w-full bg-amber-500 text-black py-4 rounded-xl font-bold hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 text-lg disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                    {bookingInProgress ? 'กำลังจอง...' : 'ยืนยันการจอง'}
+                  </button>
                 </div>
-                <button
-                  onClick={confirmBooking}
-                  disabled={bookingInProgress}
-                  className="w-full bg-amber-500 text-black py-4 rounded-xl font-bold hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 text-lg disabled:opacity-70 disabled:cursor-not-allowed"
-                >
-                  {bookingInProgress ? 'กำลังจอง...' : 'ยืนยันการจอง'}
-                </button>
-              </div>
-            )}
-            {bookingStep === 'success' && (
-              <div className="p-6 border-t border-white/10 bg-zinc-900">
-                <button
-                  onClick={handleFinishBooking}
-                  className="w-full bg-amber-500 text-black py-4 rounded-xl font-bold hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 text-lg"
-                >
-                  จองเสร็จสิ้น
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+              )
+            }
+            {
+              bookingStep === 'success' && (
+                <div className="p-6 border-t border-white/10 bg-zinc-900">
+                  <button
+                    onClick={handleFinishBooking}
+                    className="w-full bg-amber-500 text-black py-4 rounded-xl font-bold hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 text-lg"
+                  >
+                    จองเสร็จสิ้น
+                  </button>
+                </div>
+              )
+            }
+          </div >
+        </div >
+      )
+      }
 
       {/* --- NOTIFICATION MODAL --- */}
-      {notification.show && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center p-6 sm:p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" onClick={() => setNotification({ ...notification, show: false })}></div>
-          <div className="bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl border border-white/10 p-8 text-center relative z-10 animate-[slideUp_0.3s_ease-out]">
-            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${notification.type === 'error' ? 'bg-red-500/20 text-red-500' :
-              notification.type === 'warning' ? 'bg-amber-500/20 text-amber-500' :
-                'bg-green-500/20 text-green-500'
-              }`}>
-              {notification.type === 'error' ? <XCircle className="w-8 h-8" /> :
-                notification.type === 'warning' ? <AlertCircle className="w-8 h-8" /> :
-                  <CheckCircle className="w-8 h-8" />}
+      {
+        notification.show && (
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-6 sm:p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" onClick={() => setNotification({ ...notification, show: false })}></div>
+            <div className="bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl border border-white/10 p-8 text-center relative z-10 animate-[slideUp_0.3s_ease-out]">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${notification.type === 'error' ? 'bg-red-500/20 text-red-500' :
+                notification.type === 'warning' ? 'bg-amber-500/20 text-amber-500' :
+                  'bg-green-500/20 text-green-500'
+                }`}>
+                {notification.type === 'error' ? <XCircle className="w-8 h-8" /> :
+                  notification.type === 'warning' ? <AlertCircle className="w-8 h-8" /> :
+                    <CheckCircle className="w-8 h-8" />}
+              </div>
+              <h4 className="text-xl font-bold text-white mb-2">
+                {notification.type === 'error' ? 'เกิดข้อผิดพลาด' :
+                  notification.type === 'warning' ? 'แจ้งเตือน' :
+                    'สำเร็จ'}
+              </h4>
+              <p className="text-zinc-400 text-sm leading-relaxed mb-8">{notification.message}</p>
+              <button
+                onClick={() => setNotification({ ...notification, show: false })}
+                className={`w-full py-3 rounded-xl font-bold transition-all shadow-lg ${notification.type === 'error' ? 'bg-red-500 text-white hover:bg-red-400 shadow-red-500/20' :
+                  'bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20'
+                  }`}
+              >
+                ตกลง
+              </button>
             </div>
-            <h4 className="text-xl font-bold text-white mb-2">
-              {notification.type === 'error' ? 'เกิดข้อผิดพลาด' :
-                notification.type === 'warning' ? 'แจ้งเตือน' :
-                  'สำเร็จ'}
-            </h4>
-            <p className="text-zinc-400 text-sm leading-relaxed mb-8">{notification.message}</p>
-            <button
-              onClick={() => setNotification({ ...notification, show: false })}
-              className={`w-full py-3 rounded-xl font-bold transition-all shadow-lg ${notification.type === 'error' ? 'bg-red-500 text-white hover:bg-red-400 shadow-red-500/20' :
-                'bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20'
-                }`}
-            >
-              ตกลง
-            </button>
           </div>
-        </div>
-      )}
+        )
+      }
 
-    </div>
+    </div >
   );
 }

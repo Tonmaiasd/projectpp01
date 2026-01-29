@@ -273,7 +273,7 @@ app.post('/api/cancel-full-day-bookings', async (req, res) => {
     }
 
     // --- ส่วนการจัดการข้อความแจ้งเตือน ---
-    
+
     // แปลงวันที่จาก 2026-01-30 เป็น "30 มกราคม 2569"
     const formattedDate = new Date(date).toLocaleDateString('th-TH', {
       day: 'numeric',
@@ -307,10 +307,10 @@ app.post('/api/cancel-full-day-bookings', async (req, res) => {
       }
     }
 
-    res.json({ 
-      success: true, 
-      message: `ยกเลิกคิววันที่ ${formattedDate} และแจ้งเตือนเรียบร้อยแล้ว ${successCount} รายการ`, 
-      count: successCount 
+    res.json({
+      success: true,
+      message: `ยกเลิกคิววันที่ ${formattedDate} และแจ้งเตือนเรียบร้อยแล้ว ${successCount} รายการ`,
+      count: successCount
     });
 
   } catch (err) {
@@ -645,7 +645,11 @@ app.get('/', (_req, res) => {
 app.listen(PORT, () => {
   console.log(`LINE messaging server listening on http://localhost:${PORT}`);
   // Start the auto-notification loop
-  setInterval(runAutoNotificationCheck, 60000);
+  // Start the auto-notification and cleanup loop
+  setInterval(() => {
+    runAutoNotificationCheck();
+    checkExpiredPromotions();
+  }, 60000);
   console.log('🚀 Auto-notification sync active (Checking every minute)');
 });
 
@@ -716,4 +720,46 @@ const runAutoNotificationCheck = async () => {
     console.error('AutoNotification Error:', err.message);
   }
 };
+
+const checkExpiredPromotions = async () => {
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Get Local Date (Thailand GMT+7)
+    const nowLocal = new Date(new Date().getTime() + (7 * 60 * 60 * 1000));
+    const today = nowLocal.toISOString().split('T')[0];
+
+    // Find active promotions that have expired (expire_date < today)
+    const { data: expiredPromos, error } = await supabaseAdmin
+      .from('promotions')
+      .select('id, title')
+      .eq('active', true)
+      .lt('expire_date', today);
+
+    if (error) {
+      // Ignore "is null" errors if any, but regular select shouldn't error
+      console.error('Error querying expired promos:', error.message);
+      return;
+    }
+
+    if (expiredPromos && expiredPromos.length > 0) {
+      console.log(`[AutoExpire] Found ${expiredPromos.length} expired promotions:`, expiredPromos.map(p => p.title));
+
+      // Deactivate them
+      const { error: updateError } = await supabaseAdmin
+        .from('promotions')
+        .update({ active: false })
+        .in('id', expiredPromos.map(p => p.id));
+
+      if (updateError) throw updateError;
+      console.log(`[AutoExpire] Successfully deactivated ${expiredPromos.length} promotions.`);
+    }
+  } catch (err) {
+    console.error('Error in checkExpiredPromotions:', err.message);
+  }
+};
+
 
