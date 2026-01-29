@@ -7,6 +7,7 @@ export default function Promotions() {
   const [promotions, setPromotions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [notification, setNotification] = useState(null);
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -21,6 +22,11 @@ export default function Promotions() {
     expire_date: '',
     active: true,
   });
+
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
 
   useEffect(() => {
     const fetchPromotions = async () => {
@@ -63,7 +69,7 @@ export default function Promotions() {
       if (error) throw error;
       setPromotions((prev) => prev.map(p => p.id === id ? data : p));
     } catch (err) {
-      alert('ไม่สามารถเปลี่ยนสถานะได้: ' + err.message);
+      showNotification('ไม่สามารถเปลี่ยนสถานะได้: ' + err.message, 'error');
     }
   };
 
@@ -95,7 +101,7 @@ export default function Promotions() {
       if (error) throw error;
       setPromotions(promotions.filter(p => p.id !== id));
     } catch (err) {
-      alert('ลบโปรโมชั่นไม่สำเร็จ: ' + err.message);
+      showNotification('ลบโปรโมชั่นไม่สำเร็จ: ' + err.message, 'error');
     }
   };
 
@@ -103,7 +109,7 @@ export default function Promotions() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title || !formData.code || !formData.discount_text) {
-      alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+      showNotification("กรุณากรอกข้อมูลให้ครบถ้วน", 'warning');
       return;
     }
 
@@ -123,7 +129,7 @@ export default function Promotions() {
           .single();
         if (error) throw error;
         setPromotions(promotions.map(p => p.id === currentPromo.id ? data : p));
-        alert("แก้ไขโปรโมชั่นเรียบร้อย");
+        showNotification("แก้ไขโปรโมชั่นเรียบร้อย", 'success');
       } else {
         const { data, error } = await supabase
           .from('promotions')
@@ -138,21 +144,38 @@ export default function Promotions() {
           .single();
         if (error) throw error;
         setPromotions([data, ...promotions]);
-        alert("สร้างโปรโมชั่นใหม่เรียบร้อย");
+        showNotification("สร้างโปรโมชั่นใหม่เรียบร้อย", 'success');
       }
       setIsModalOpen(false);
     } catch (err) {
       console.error('Error saving promotion:', err);
-      if (err.message?.includes('row-level security') || err.message?.includes('relation')) {
-        alert('❌ ข้อผิดพลาด:\nโปรดรันคำสั่ง SQL ใน Supabase:\n\n✅ CREATE_PROMOTIONS_TABLE.sql\n\nแล้วรีเฟรชหน้า');
-      } else {
-        alert('บันทึกโปรโมชั่นไม่สำเร็จ: ' + err.message);
-      }
+      showNotification('บันทึกโปรโมชั่นไม่สำเร็จ: ' + err.message, 'error');
     }
   };
 
   return (
     <div className="space-y-6 animate-[fadeIn_0.5s_ease-out]">
+
+      {/* Notification Card */}
+      {notification && (
+        <div className={`p-4 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-300 flex items-center gap-3 ${
+          notification.type === 'success' 
+            ? 'bg-green-500/10 border-green-500/30 text-green-400'
+            : notification.type === 'error'
+            ? 'bg-red-500/10 border-red-500/30 text-red-400'
+            : notification.type === 'warning'
+            ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+            : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+        }`}>
+          <div className="text-xl">
+            {notification.type === 'success' && '✓'}
+            {notification.type === 'error' && '✕'}
+            {notification.type === 'warning' && '⚠'}
+            {notification.type === 'info' && 'ℹ'}
+          </div>
+          <span className="font-medium">{notification.message}</span>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex justify-between items-center">

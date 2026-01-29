@@ -198,7 +198,7 @@ export default function AdminHolidays() {
 
             {/* Custom Confirmation Modal (Card Style) */}
             {showConfirmModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+                <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
                     <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out]">
                         <div className={`h-2 w-full ${confirmConfig.type === 'danger' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
                         <div className="p-8 text-center">
@@ -231,7 +231,7 @@ export default function AdminHolidays() {
 
             {/* Notification Modal */}
             {notification.show && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+                <div className="fixed inset-0 z-100 flex items-center justify-center p-6">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setNotification({ ...notification, show: false })}></div>
                     <div className="bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl border border-white/10 p-8 text-center relative z-10 animate-[slideUp_0.3s_ease-out]">
                         <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${notification.type === 'error' ? 'bg-red-500/20 text-red-500' : 'bg-green-500/20 text-green-500'

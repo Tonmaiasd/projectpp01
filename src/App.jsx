@@ -17,6 +17,7 @@ import AdminServices from "./pages/admin/Services";
 import AdminUsers from "./pages/admin/Users";
 import AdminPromotions from "./pages/admin/Promotions";
 import AdminHolidays from "./pages/admin/Holidays";
+import AdminComments from "./pages/admin/comments";
 
 export default function App() {
   return (
@@ -60,6 +61,7 @@ export default function App() {
         <Route path="users" element={<AdminUsers />} />
         <Route path="promotions" element={<AdminPromotions />} />
         <Route path="holidays" element={<AdminHolidays />} />
+        <Route path="comments" element={<AdminComments />} />
       </Route>
 
       {/* Catch-all route: ถ้าพิมพ์ URL ผิด ให้กลับไปหน้าแรก */}

@@ -512,7 +512,7 @@ export default function Booking() {
         {!loading && error && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-400 rounded-2xl p-4">
             <div className="font-bold mb-1">โหลดรายการแพ็คเกจไม่สำเร็จ</div>
-            <div className="text-sm break-words">{error}</div>
+            <div className="text-sm wrap-break-word">{error}</div>
           </div>
         )}
 
@@ -563,7 +563,7 @@ export default function Booking() {
                   </div>
 
                   {/* Content Area */}
-                  <div className="flex-grow flex flex-col">
+                  <div className="grow flex flex-col">
                     <div className="flex justify-between items-start mb-2">
                       <div>
                         <h3 className="font-serif font-bold text-xl text-white leading-tight mb-1 group-hover:text-amber-500 transition-colors">{pkg.name}</h3>
@@ -664,7 +664,7 @@ export default function Booking() {
                   {/* Date & Time Input */}
                   <div className="space-y-4">
                     <div>
-                      <label className="text-sm font-bold text-zinc-400 mb-2 block flex items-center gap-2">
+                      <label className="text-sm font-bold text-zinc-400 mb-2 block items-center gap-2">
                         <Calendar className="w-4 h-4 text-amber-500" /> วันที่
                       </label>
                       <input
@@ -677,7 +677,7 @@ export default function Booking() {
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-bold text-zinc-400 mb-3 block flex items-center gap-2">
+                      <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
                         <Clock className="w-4 h-4 text-amber-500" /> เลือกเวลาที่ต้องการ
                       </label>
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
@@ -725,7 +725,7 @@ export default function Booking() {
                   {/* User Info */}
                   <div className="space-y-4 pt-4 border-t border-white/10">
                     <div>
-                      <label className="text-sm font-bold text-zinc-400 mb-2 block flex items-center gap-2">
+                      <label className="text-sm font-bold text-zinc-400 mb-2 block items-center gap-2">
                         <User className="w-4 h-4 text-amber-500" /> ชื่อผู้จอง
                       </label>
                       <input
@@ -740,7 +740,7 @@ export default function Booking() {
 
                   {/* Promotion Selector */}
                   <div className="space-y-4 pt-4 border-t border-white/10">
-                    <label className="text-sm font-bold text-zinc-400 mb-3 block flex items-center gap-2">
+                    <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
                       <Sparkles className="w-4 h-4 text-amber-500" /> โปรโมชั่น (ถ้ามี)
                     </label>
                     <div className="flex flex-col gap-2">
@@ -789,7 +789,7 @@ export default function Booking() {
 
               {/* STEP 2: Success - แสดง QR Code สำหรับเพิ่มเพื่อน */}
               {bookingStep === 'success' && (
-                <div className="p-8 text-center bg-zinc-950 min-h-[400px] flex flex-col items-center justify-center animate-[fadeIn_0.5s_ease-out]">
+                <div className="p-8 text-center bg-zinc-950 min-h-100 flex flex-col items-center justify-center animate-[fadeIn_0.5s_ease-out]">
                   <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-amber-500/10">
                     <CheckCircle className="w-10 h-10 text-amber-500" />
                   </div>
@@ -799,7 +799,7 @@ export default function Booking() {
                   </p>
 
                   <div className="relative group">
-                    <div className="absolute -inset-4 bg-gradient-to-tr from-amber-500 to-amber-200 rounded-[2rem] opacity-20 blur-xl group-hover:opacity-40 transition-opacity"></div>
+                    <div className="absolute -inset-4 bg-linear-to-tr from-amber-500 to-amber-200 rounded-4xl opacity-20 blur-xl group-hover:opacity-40 transition-opacity"></div>
                     <div className="relative bg-white p-4 rounded-3xl shadow-2xl border-4 border-amber-500/20">
                       <img
                         src="/line-oa-qr.png"
@@ -860,7 +860,7 @@ export default function Booking() {
 
       {/* --- NOTIFICATION MODAL --- */}
       {notification.show && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-4">
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-6 sm:p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" onClick={() => setNotification({ ...notification, show: false })}></div>
           <div className="bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl border border-white/10 p-8 text-center relative z-10 animate-[slideUp_0.3s_ease-out]">
             <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${notification.type === 'error' ? 'bg-red-500/20 text-red-500' :

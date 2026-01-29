@@ -645,7 +645,7 @@ export default function Bookings() {
       <div className="flex flex-col xl:flex-row gap-8 items-start">
 
         {/* --- Left Pane: Time Grid Sidebar --- */}
-        <div className="w-full xl:w-[380px] bg-zinc-900/50 backdrop-blur-md rounded-2xl p-4 border border-white/5 shadow-2xl shrink-0">
+        <div className="w-full xl:w-95 bg-zinc-900/50 backdrop-blur-md rounded-2xl p-4 border border-white/5 shadow-2xl shrink-0">
           <div className="flex items-center gap-3 mb-4 px-2">
             <div className="p-1.5 bg-amber-500/10 rounded-lg">
               <Clock className="text-amber-500" size={18} />
@@ -718,9 +718,9 @@ export default function Bookings() {
         </div>
 
         {/* --- Right Pane: Detail View Card --- */}
-        <div className="flex-1 w-full min-h-[500px]">
+        <div className="flex-1 w-full min-h-125">
           {loading ? (
-            <div className="h-full min-h-[500px] flex flex-col items-center justify-center bg-zinc-900/30 rounded-[3rem] border border-white/5">
+            <div className="h-full min-h-125 flex flex-col items-center justify-center bg-zinc-900/30 rounded-[3rem] border border-white/5">
               <div className="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-4"></div>
               <p className="text-zinc-500 font-bold">กำลังอัปเดตข้อมูล...</p>
             </div>
@@ -912,7 +912,7 @@ export default function Bookings() {
 
               {/* Date Selection */}
               <div>
-                <label className="text-sm font-bold text-zinc-400 mb-3 block flex items-center gap-2">
+                <label className="text-sm font-bold text-zinc-400 mb-3 flex items-center gap-2">
                   <Calendar size={16} /> เลือกวันที่ต้องการเลื่อนไป
                 </label>
                 <input
@@ -929,10 +929,10 @@ export default function Bookings() {
               {/* Time Selection */}
               {rescheduleData.date && (
                 <div className="animate-[fadeIn_0.3s_ease-out]">
-                  <label className="text-sm font-bold text-zinc-400 mb-3 block flex items-center gap-2">
+                  <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
                     <Clock size={16} /> เลือกเวลาใหม่
                   </label>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-62.5 overflow-y-auto pr-2 scrollbar-hide">
                     {timeSlots.map(slot => {
                       const isBooked = rescheduleBookedSlots.some(bTime => bTime && bTime.startsWith(slot));
                       const isBusy = rescheduleAdminBusySlots.some(busy => {
@@ -1220,7 +1220,7 @@ export default function Bookings() {
                   <button
                     type="submit"
                     disabled={isProcessingBusy}
-                    className="flex-[2] py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
+                    className="flex-2 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
                   >
                     {isProcessingBusy ? (
                       <>
@@ -1241,7 +1241,7 @@ export default function Bookings() {
       {/* --- Custom Confirmation Modal (Card Style) --- */}
       {
         showConfirmModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
             <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out]">
               <div className={`h-2 w-full ${confirmConfig.type === 'danger' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
               <div className="p-8 text-center">
@@ -1276,7 +1276,7 @@ export default function Bookings() {
       {/* --- NOTIFICATION MODAL --- */}
       {
         notification.show && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-4">
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-6 sm:p-4">
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" onClick={() => setNotification({ ...notification, show: false })}></div>
             <div className="bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl border border-white/10 p-8 text-center relative z-10 animate-[slideUp_0.3s_ease-out]">
               <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${notification.type === 'error' ? 'bg-red-500/20 text-red-500' :

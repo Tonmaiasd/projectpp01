@@ -76,31 +76,73 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   // --- แก้ไขจุดสำคัญตรงนี้ ---
-  const login = async (email, password) => {
+  const login = async (identifier, password) => {
     if (!supabase) throw new Error("Supabase is not configured.");
 
-    // 1. เริ่ม Loading ทันทีที่กด Login เพื่อบล็อกหน้าจอไม่ให้ Redirect มั่ว
     setLoading(true);
-
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      // ถ้า user พิมพ์เบอร์ 10 หลัก ให้ใช้เบอร์เป็นตัวระบุ
+      let email;
+      const phoneMatch = typeof identifier === 'string' && /^\d{10}$/.test(identifier.trim());
+      if (phoneMatch) {
+        const phone = identifier.trim();
+        email = `${phone}@phone.local`;
+      } else {
+        const name = (identifier || '').toString().trim();
 
-      // 2. ถ้า Login สำเร็จ ให้ดึง Role ทันที (ไม่ต้องรอ Listener)
-      if (data.session?.user) {
+        // พยายามหา profile โดย full_name ก่อน (กรณีผู้ใช้ใส่ชื่อ)
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('phone')
+            .eq('full_name', name)
+            .maybeSingle();
+
+          if (profileError) {
+            console.warn('login: profile lookup error', profileError.message);
+          }
+
+          if (profile?.phone) {
+            email = `${profile.phone}@phone.local`;
+          }
+        } catch (e) {
+          console.warn('login: profile lookup failed', e);
+        }
+
+        // ถ้ายังไม่พบ phone ให้ sanitize ชื่อเป็น ASCII slug เพื่อสร้าง synthetic email
+        if (!email) {
+          const ascii = name
+            .normalize('NFKD')
+            .replace(/[^\x00-\x7F]/g, '')
+            .replace(/[^a-zA-Z0-9._-]/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .toLowerCase();
+
+          if (!ascii) throw new Error('ชื่อไม่สามารถใช้เป็นบัญชีได้ กรุณาใช้เบอร์โทรแทน');
+
+          email = `${ascii}@name.local`;
+        }
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        // ให้ข้อความ error ชัดเจนขึ้น
+        throw new Error(error.message || 'Login failed');
+      }
+
+      if (data?.session?.user) {
         setUser(data.session.user);
         await fetchUserRole(data.session.user.id);
       }
-    } catch (error) {
-      throw error;
     } finally {
-      // 3. เมื่อเช็คทุกอย่างเสร็จค่อยปลด Loading (ตอนนี้ isAdmin จะเป็นค่าที่ถูกต้องแล้ว)
       setLoading(false);
     }
   };
 
-  const register = async (email, password, options) => {
+  const register = async (phone, password, options) => {
     if (!supabase) throw new Error("Supabase is not configured.");
+    // แปลง phone เป็น email format ที่ Supabase ยอมรับ
+    const email = `${phone}@phone.local`;
     const { error } = await supabase.auth.signUp({ email, password, options });
     if (error) throw error;
   };

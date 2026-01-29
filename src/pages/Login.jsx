@@ -39,30 +39,28 @@ export default function Login() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('redirect') === 'booking') {
       setIsRedirectFromBooking(true);
-      setError("กรุณาเข้าสู่ระบบผ่าน LINE เพื่อเริ่มการจองคิว");
+      setError("กรุณาเข้าสู่ระบบผ่านเพื่อเริ่มการจองคิว");
     }
   }, []);
 
   // --- State ---
   const [currentPage, setCurrentPage] = useState("login"); // 'login' or 'register'
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false); // Loading ของการกดปุ่ม Submit
+  const [loading, setLoading] = useState(false); 
   const [error, setError] = useState(null);
 
   // Form Data
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
     name: "",
+    password: "",
     phone: ""
   });
 
   // Animation Trigger
   const [animate, setAnimate] = useState(false);
 
-  // --- 1. Redirection Logic (สำคัญที่สุด) ---
+  // --- 1. Redirection Logic ---
   useEffect(() => {
-    // ถ้าระบบเช็ค Auth เสร็จแล้ว (authLoading = false) และมี User
     if (!authLoading && user) {
       if (isAdmin) {
         navigate("/admin/dashboard");
@@ -95,9 +93,17 @@ export default function Login() {
     return () => clearTimeout(timer);
   }, [currentPage]);
 
-  // Handle Input Change
+  // --- แก้ไขจุดที่ 1: Handle Input Change เพื่อกรองตัวเลขช่องเบอร์โทร ---
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    
+    if (name === "phone") {
+      // ลบทุกอย่างที่ไม่ใช่ตัวเลข 0-9 ออกไปทันที
+      const onlyNums = value.replace(/[^0-9]/g, '');
+      setFormData({ ...formData, [name]: onlyNums });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
     setError(null);
   };
 
@@ -105,15 +111,14 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!formData.email || !formData.password) {
-      setError("กรุณากรอกอีเมลและรหัสผ่าน");
+    if (!formData.name || !formData.password) {
+      setError("กรุณากรอกชื่อและรหัสผ่าน");
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      await login(formData.email, formData.password);
-      // ไม่ต้องทำอะไรต่อ useEffect ด้านบนจะทำงานเองเมื่อ Login ผ่าน
+      await login(formData.name, formData.password);
     } catch (err) {
       setError("เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูล");
       setLoading(false);
@@ -122,19 +127,16 @@ export default function Login() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.email || !formData.password) {
+    if (!formData.name || !formData.phone || !formData.password) {
       setError("กรุณากรอกข้อมูลให้ครบถ้วน");
       return;
     }
 
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setError("รูปแบบอีเมลไม่ถูกต้อง");
+    if (!/^\d{10}$/.test(formData.phone)) {
+      setError("เบอร์โทรต้องมี 10 ตัวเลข");
       return;
     }
 
-    // Password validation
     if (formData.password.length < 6) {
       setError("รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร");
       return;
@@ -143,16 +145,16 @@ export default function Login() {
     setLoading(true);
     setError(null);
     try {
-      await register(formData.email, formData.password, {
+      await register(formData.phone, formData.password, {
         data: { name: formData.name, phone: formData.phone }
       });
-      showNotification("สมัครสมาชิกเรียบร้อย! กรุณาตรวจสอบอีเมลเพื่อยืนยันตัวตน", "success");
+      showNotification("สมัครสมาชิกเรียบร้อย! กรุณารอการยืนยันข้อมูล", "success");
       setAnimate(false);
       setCurrentPage("login");
-      setFormData({ email: "", password: "", name: "", phone: "" });
+      setFormData({ phone: "", password: "", name: "" });
     } catch (err) {
       console.error('Registration error:', err);
-      setError("สมัครสมาชิกไม่สำเร็จ หรืออีเมลนี้ถูกใช้งานแล้ว");
+      setError("เบอร์โทรนี้ถูกใช้งานแล้ว");
     } finally {
       setLoading(false);
     }
@@ -164,7 +166,6 @@ export default function Login() {
     setCurrentPage(currentPage === "login" ? "register" : "login");
   };
 
-  // --- LINE Login Handler ---
   const handleLineLogin = async () => {
     setLiffLoading(true);
     setError(null);
@@ -192,7 +193,6 @@ export default function Login() {
 
       const profile = await window.liff.getProfile();
       await loginWithLine(profile);
-      // navigation is handled by useEffect
     } catch (err) {
       console.error("LINE Login Error:", err);
       setError("การเข้าสู่ระบบผ่าน LINE ล้มเหลว: " + err.message);
@@ -201,8 +201,6 @@ export default function Login() {
     }
   };
 
-  // --- 2. Prevent Flash (ป้องกันหน้ากระพริบ) ---
-  // ถ้า AuthContext ยังเช็คไม่เสร็จ ให้แสดงหน้า Loading หรือจอว่างๆ แทน
   if (authLoading) {
     return (
       <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
@@ -219,18 +217,16 @@ export default function Login() {
         .font-sans { font-family: 'Manrope', sans-serif; }
       `}</style>
 
-      {/* Grid Layout: ซ้ายรูปภาพ / ขวาฟอร์ม */}
-      <div className="bg-zinc-900 w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden grid md:grid-cols-2 border border-white/10 min-h-[600px] relative z-10">
+      <div className="bg-zinc-900 w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden grid md:grid-cols-2 border border-white/10 min-h-150 relative z-10">
 
-        {/* --- LEFT SIDE: IMAGE & BRANDING --- */}
+        {/* --- LEFT SIDE --- */}
         <div className="relative hidden md:block overflow-hidden group">
           <img
             src="https://images.unsplash.com/photo-1503951914205-b27cfca5639e?q=80&w=2070&auto=format&fit=crop"
             alt="Barbershop Atmosphere"
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
-
+          <div className="absolute inset-0 bg-linear-to-t from-black via-black/50 to-transparent"></div>
           <div className="absolute bottom-10 left-10 right-10 z-10">
             <div className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(245,158,11,0.5)]">
               <Scissors className="w-8 h-8 text-black" />
@@ -242,9 +238,8 @@ export default function Login() {
           </div>
         </div>
 
-        {/* --- RIGHT SIDE: FORM --- */}
+        {/* --- RIGHT SIDE --- */}
         <div className="relative flex flex-col justify-center p-8 md:p-12 lg:p-16">
-          {/* Back Button */}
           <button
             onClick={() => navigate("/")}
             className="absolute top-6 left-6 p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white transition-colors flex items-center gap-2 text-sm group"
@@ -269,54 +264,29 @@ export default function Login() {
             </div>
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500 text-red-400 p-3 rounded-lg mb-4 text-sm">
-                {error}
+              <div className="bg-red-500/10 border border-red-500 text-red-400 p-3 rounded-lg mb-4 text-sm flex items-center gap-2">
+                <AlertCircle size={16} /> {error}
               </div>
             )}
 
             <form onSubmit={currentPage === "login" ? handleLogin : handleRegister} className="space-y-5">
-
-              {/* Name Field (Register Only) */}
-              {currentPage === "register" && (
-                <div className="group">
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <User className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
-                    </div>
-                    <input
-                      type="text"
-                      name="name"
-                      placeholder="ชื่อ-นามสกุล"
-                      value={formData.name}
-                      onChange={handleChange}
-                      className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Email or Phone Field */}
               <div className="group">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    {currentPage === "login" ? (
-                      <User className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
-                    ) : (
-                      <Mail className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
-                    )}
+                    <User className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
                   </div>
                   <input
-                    type={currentPage === "login" ? "text" : "email"}
-                    name="email"
-                    placeholder={currentPage === "login" ? "อีเมล หรือ เบอร์โทรศัพท์" : "อีเมลของคุณ"}
-                    value={formData.email}
+                    type="text"
+                    name="name"
+                    placeholder={currentPage === "login" ? "ชื่อของคุณ" : "ชื่อ-นามสกุล"}
+                    value={formData.name}
                     onChange={handleChange}
                     className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
                   />
                 </div>
               </div>
 
-              {/* Phone Field (Register Only) */}
+              {/* --- แก้ไขจุดที่ 2: เพิ่ม inputMode="numeric" ในช่อง Phone --- */}
               {currentPage === "register" && (
                 <div className="group">
                   <div className="relative">
@@ -326,16 +296,17 @@ export default function Login() {
                     <input
                       type="tel"
                       name="phone"
-                      placeholder="เบอร์โทรศัพท์"
+                      inputMode="numeric"
+                      placeholder="เบอร์โทรศัพท์ (10 หลัก)"
                       value={formData.phone}
                       onChange={handleChange}
+                      maxLength="10"
                       className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
                     />
                   </div>
                 </div>
               )}
 
-              {/* Password Field */}
               <div className="group">
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -359,14 +330,6 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Forgot Password (Login Only) */}
-              {currentPage === "login" && (
-                <div className="flex justify-end">
-                  <a href="#" className="text-sm text-zinc-500 hover:text-amber-500 transition-colors">ลืมรหัสผ่าน?</a>
-                </div>
-              )}
-
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}
@@ -386,8 +349,6 @@ export default function Login() {
               </button>
             </form>
 
-
-            {/* Toggle Login/Register */}
             <div className="mt-8 text-center pt-6 border-t border-white/5">
               <p className="text-zinc-500">
                 {currentPage === "login" ? "ยังไม่มีบัญชีสมาชิก?" : "มีบัญชีอยู่แล้ว?"}
@@ -400,12 +361,10 @@ export default function Login() {
                 </button>
               </p>
             </div>
-
           </div>
         </div>
       </div>
 
-      {/* --- Admin Shortcut (Optional) --- */}
       <div className="absolute bottom-4 right-4 z-20 opacity-30 hover:opacity-100 transition-opacity">
         <button
           onClick={() => navigate("/admin/dashboard")}
@@ -415,6 +374,13 @@ export default function Login() {
         </button>
       </div>
 
+      {/* Notification Toast */}
+      {notification.show && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-100 bg-zinc-900 border border-white/10 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
+          {notification.type === 'success' ? <CheckCircle className="text-green-500" /> : <AlertCircle className="text-amber-500" />}
+          <span className="text-white">{notification.message}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -364,11 +364,38 @@ export default function Profile() {
 
   const handleSave = async () => {
     try {
+      const phone = (formData.phone || '').toString().trim();
+
+      // Validate phone length and digits
+      if (phone && !/^\d{10}$/.test(phone)) {
+        showNotification('เบอร์โทรต้องเป็นตัวเลข 10 หลักเท่านั้น', 'error');
+        return;
+      }
+
+      // Check uniqueness: ไม่มีใครใช้เบอร์นี้ ยกเว้นตัวเอง
+      if (phone) {
+        const { data: existing, error: existError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('phone', phone)
+          .neq('id', user.id)
+          .maybeSingle();
+
+        if (existError) {
+          console.warn('phone uniqueness check failed', existError.message);
+        }
+
+        if (existing) {
+          showNotification('เบอร์โทรนี้ถูกใช้งานแล้วโดยผู้ใช้รายอื่น', 'error');
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('profiles')
         .update({
           full_name: formData.fullName,
-          phone: formData.phone,
+          phone: phone || null,
           address: formData.address,
           updated_at: new Date().toISOString()
         })
@@ -376,22 +403,22 @@ export default function Profile() {
 
       if (error) throw error;
 
-      // Also update user_metadata in auth.users if needed, though 'profiles' table is preferred for public data
+      // Also update user_metadata in auth.users if needed
       const { error: userUpdateError } = await supabase.auth.updateUser({
         data: {
           name: formData.fullName,
-          phone: formData.phone,
+          phone: phone || null,
         }
       });
 
       if (userUpdateError) throw userUpdateError;
 
-      setProfile(formData);
+      setProfile({ ...formData, phone });
       setIsEditing(false);
-      showNotification("บันทึกข้อมูลเรียบร้อย!", "success");
+      showNotification('บันทึกข้อมูลเรียบร้อย!', 'success');
     } catch (error) {
-      showNotification("Error saving profile: " + error.message, "error");
-      console.error("Error saving profile:", error);
+      showNotification('Error saving profile: ' + (error?.message || error), 'error');
+      console.error('Error saving profile:', error);
     }
   };
 
@@ -671,6 +698,17 @@ export default function Profile() {
 
       <div className="max-w-6xl mx-auto px-6">
 
+        {/* --- Link LINE Notice --- */}
+        {showLinkNotice && !profileLineId && (
+          <div className="mb-8 p-4 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-start gap-4">
+            <AlertCircle className="text-green-500 shrink-0 mt-1" size={20} />
+            <div>
+              <h4 className="font-bold text-green-500 mb-1">เชื่อมต่อ LINE สำเร็จแล้ว!</h4>
+              <p className="text-xs text-green-400/80">บัญชี LINE ของคุณเชื่อมต่อเรียบร้อยแล้ว คุณจะได้รับการแจ้งเตือนคิวผ่าน LINE</p>
+            </div>
+          </div>
+        )}
+
         {/* --- Header --- */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-6">
           <div>
@@ -686,25 +724,6 @@ export default function Profile() {
               />
             </h1>
           </div>
-
-          {showLinkNotice && !profileLineId && (
-            <div className="md:col-span-1 bg-red-600/10 border border-red-600/20 p-4 rounded-2xl flex items-center gap-4 animate-[bounce_1s_infinite] shadow-lg shadow-red-600/10">
-              <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center shrink-0">
-                <AlertCircle className="text-white" size={20} />
-              </div>
-              <div>
-                <h4 className="font-bold text-red-500">กรุณาเชื่อมต่อ LINE</h4>
-                <p className="text-xs text-red-400/80">เพื่อให้ร้านค้าสามารถส่งการแจ้งเตือนคิวผ่าน LINE ให้คุณได้ครับ</p>
-              </div>
-            </div>
-          )}
-
-          {/* <button
-            onClick={handleLogout}
-            className="flex items-center gap-2 px-6 py-3 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl transition-all duration-300 border border-red-600/20 font-bold text-sm"
-          >
-            <LogOut size={18} /> ออกจากระบบ
-          </button> */}
         </div>
 
         <div className="grid lg:grid-cols-3 gap-8">
@@ -712,7 +731,7 @@ export default function Profile() {
           {/* --- Left Column: Profile Card --- */}
           <div className="lg:col-span-1">
             <div className="bg-zinc-900 rounded-3xl p-8 border border-white/10 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-amber-500/20 to-transparent"></div>
+              <div className="absolute top-0 left-0 w-full h-32 bg-linear-to-b from-amber-500/20 to-transparent"></div>
 
               <div className="relative z-10 flex flex-col items-center text-center">
                 <div
@@ -729,13 +748,6 @@ export default function Profile() {
                 <h2 className="text-2xl font-bold text-white mb-1">{profile.fullName}</h2>
 
                 <div className="w-full space-y-4 text-left bg-zinc-950/50 p-6 rounded-2xl border border-white/5 mt-6">
-                  <div className="flex items-start gap-3">
-                    <Mail className="w-5 h-5 text-zinc-500 mt-0.5" />
-                    <div className="min-w-0">
-                      <p className="text-xs text-zinc-500 uppercase font-bold">อีเมล</p>
-                      <p className="text-zinc-300 text-sm truncate">{profile.email}</p>
-                    </div>
-                  </div>
                   <div className="flex items-start gap-3">
                     <Phone className="w-5 h-5 text-zinc-500 mt-0.5" />
                     <div>
@@ -899,22 +911,23 @@ export default function Profile() {
               <div>
                 <label className="text-sm font-bold text-zinc-400 mb-2 block">เบอร์โทรศัพท์</label>
                 <input
-                  type="text"
+                  type="tel"
                   name="phone"
                   value={formData.phone}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, ''); // เอาเฉพาะตัวเลข
+                    if (value.length <= 10) {
+                      handleChange({ target: { name: 'phone', value } });
+                    }
+                  }}
+                  maxLength={10}
+                  pattern="[0-9]{10}"
+                  placeholder="0812345678"
                   className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500 outline-none transition-colors font-num"
                 />
-              </div>
-              <div>
-                <label className="text-sm font-bold text-zinc-400 mb-2 block">อีเมล</label>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500 outline-none transition-colors"
-                />
+                {formData.phone && formData.phone.length !== 10 && (
+                  <p className="text-red-400 text-xs mt-2">⚠️ กรุณากรอกเบอร์โทรศัพท์ 10 หลัก</p>
+                )}
               </div>
               <div>
                 <label className="text-sm font-bold text-zinc-400 mb-2 block">ที่อยู่</label>
@@ -928,7 +941,7 @@ export default function Profile() {
               </div>
               {/* --- NOTIFICATION MODAL --- */}
               {notification.show && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 sm:p-4">
+                <div className="fixed inset-0 z-100 flex items-center justify-center p-6 sm:p-4">
                   <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" onClick={() => setNotification({ ...notification, show: false })}></div>
                   <div className="bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl border border-white/10 p-8 text-center relative z-10 animate-[slideUp_0.3s_ease-out]">
                     <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${notification.type === 'error' ? 'bg-red-500/20 text-red-500' :
@@ -1011,7 +1024,7 @@ export default function Profile() {
 
               {/* Date Selection */}
               <div>
-                <label className="text-sm font-bold text-zinc-400 mb-3 block flex items-center gap-2">
+                <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
                   <Calendar size={16} /> เลือกวันที่ต้องการเลื่อนไป
                 </label>
                 <input
@@ -1028,10 +1041,10 @@ export default function Profile() {
               {/* Time Selection */}
               {rescheduleData.date && (
                 <div className="animate-[fadeIn_0.3s_ease-out]">
-                  <label className="text-sm font-bold text-zinc-400 mb-3 block flex items-center gap-2">
+                  <label className="text-sm font-bold text-zinc-400 mb-3 flex items-center gap-2">
                     <Clock size={16} /> เลือกเวลาใหม่
                   </label>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[250px] overflow-y-auto pr-2 scrollbar-hide">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-62.5 overflow-y-auto pr-2 scrollbar-hide">
                     {timeSlots.map(slot => {
                       const isBooked = rescheduleBookedSlots.some(bTime => bTime && bTime.startsWith(slot));
                       const isBusy = rescheduleAdminBusySlots.some(busy => {
@@ -1125,7 +1138,6 @@ export default function Profile() {
           </div>
         </div>
       )}
-
     </div>
   );
 }

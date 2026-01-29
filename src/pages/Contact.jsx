@@ -120,7 +120,7 @@ export default function Contact() {
         </div>
 
         {/* Full Width Map */}
-        <div className="rounded-3xl overflow-hidden border border-white/10 shadow-2xl h-[400px] md:h-[500px] grayscale hover:grayscale-0 transition-all duration-700 animate-[fadeIn_1s_ease-out]">
+        <div className="rounded-3xl overflow-hidden border border-white/10 shadow-2xl h-100 md:h-125 grayscale hover:grayscale-0 transition-all duration-700 animate-[fadeIn_1s_ease-out]">
             <iframe 
               title="Google Map ร้านหล่อเลย" 
               src="https://maps.google.com/maps?q=ร้านหล่อเลย+272/47+ถนนเทศบาลสงเคราะห์+สกลนคร&t=&z=17&ie=UTF8&iwloc=&output=embed" 

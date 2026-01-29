@@ -84,7 +84,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange, item
                             <button
                                 key={page}
                                 onClick={() => onPageChange(page)}
-                                className={`min-w-[40px] px-3 py-2 rounded-lg font-bold font-num text-sm transition-all border ${currentPage === page
+                                className={`min-w-10 px-3 py-2 rounded-lg font-bold font-num text-sm transition-all border ${currentPage === page
                                         ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
                                         : 'bg-zinc-800 text-zinc-300 border-white/10 hover:bg-zinc-700 hover:border-amber-500/50 hover:text-white'
                                     }`}

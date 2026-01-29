@@ -17,6 +17,10 @@ export default function UsersPage() {
   // State สำหรับการแจ้งเตือน (Notifications)
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
 
+  const sanitizePhone = (val) => {
+    return (val || '').toString().replace(/\D/g, '').slice(0, 10);
+  };
+
   // ฟังก์ชันแสดงการแจ้งเตือน
   const showNotify = (message, type = 'success') => {
     setNotification({ show: true, message, type });
@@ -57,17 +61,45 @@ export default function UsersPage() {
   const handleSaveProfile = async () => {
     if (!editingUser) return;
     try {
+      const phone = (formData.phone || '').toString().trim();
+
+      // Validate phone digits and length
+      if (phone && !/^\d{10}$/.test(phone)) {
+        showNotify('เบอร์โทรต้องเป็นตัวเลข 10 หลักเท่านั้น', 'error');
+        return;
+      }
+
+      // Check uniqueness among other users
+      if (phone) {
+        const { data: existing, error: existError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('phone', phone)
+          .neq('id', editingUser.id)
+          .maybeSingle();
+
+        if (existError) {
+          console.warn('phone uniqueness check failed', existError.message);
+        }
+
+        if (existing) {
+          showNotify('เบอร์โทรนี้ถูกใช้งานแล้วโดยผู้ใช้รายอื่น', 'error');
+          return;
+        }
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .update({
           full_name: formData.full_name || null,
-          phone: formData.phone || null,
+          phone: phone || null,
           address: formData.address || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', editingUser.id)
         .select()
         .single();
+
       if (error) throw error;
       setUsers(users.map(u => u.id === editingUser.id ? data : u));
       setEditingUser(null);
@@ -234,9 +266,17 @@ export default function UsersPage() {
               <div>
                 <label className="text-sm text-zinc-400 mb-1 block">เบอร์โทร</label>
                 <input
-                  type="text"
+                  type="tel"
+                  inputMode="numeric"
+                  pattern="\d{10}"
+                  maxLength={10}
                   value={formData.phone}
-                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={e => setFormData({ ...formData, phone: sanitizePhone(e.target.value) })}
+                  onPaste={e => {
+                    const paste = (e.clipboardData || window.clipboardData).getData('text');
+                    e.preventDefault();
+                    setFormData({ ...formData, phone: sanitizePhone(paste) });
+                  }}
                   className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none"
                 />
               </div>
@@ -271,7 +311,7 @@ export default function UsersPage() {
 
       {/* --- Notification Card --- */}
       {notification.show && (
-        <div className="fixed top-6 right-6 z-[100] animate-[slideInRight_0.3s_ease-out]">
+        <div className="fixed top-6 right-6 z-100 animate-[slideInRight_0.3s_ease-out]">
           <div className={`flex items-center gap-3 p-4 rounded-2xl border shadow-2xl backdrop-blur-md ${notification.type === 'success'
             ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
             : 'bg-red-500/10 border-red-500/20 text-red-400'

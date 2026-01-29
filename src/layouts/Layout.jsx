@@ -21,7 +21,7 @@ export default function Layout() {
       <Navbar />
 
       {/* Main Content: ปล่อยอิสระให้เต็มจอ (Full Width) */}
-      <main className="flex-grow">
+      <main className="grow">
         {/* เนื้อหาจาก Home.jsx จะแสดงผลเต็มจอทันที */}
         <Outlet />
       </main>

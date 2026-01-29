@@ -3,7 +3,7 @@ import { Outlet, NavLink, useNavigate, Link } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import {
   LayoutDashboard, CalendarDays, Scissors, Users,
-  Ticket, LogOut, Menu, X, Settings, CalendarX
+  Ticket, LogOut, Menu, X, Settings, CalendarX, MessageSquare
 } from 'lucide-react';
 
 export default function AdminLayout() {
@@ -30,6 +30,7 @@ export default function AdminLayout() {
     { icon: Scissors, label: "จัดการบริการ", path: "/admin/services" },
     { icon: Users, label: "ลูกค้าสมาชิก", path: "/admin/users" },
     { icon: Ticket, label: "โปรโมชั่น", path: "/admin/promotions" },
+    { icon: MessageSquare, label: "จัดการความเห็น", path: "/admin/comments" },
   ];
 
   return (

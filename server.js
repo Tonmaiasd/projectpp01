@@ -248,6 +248,7 @@ app.post('/api/cancel-full-day-bookings', async (req, res) => {
   try {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // 1. ดึงคิวที่เป็น Pending ของวันที่เลือกออกมา
     const { data: bookings, error: fError } = await supabaseAdmin
       .from('bookings')
       .select('*')
@@ -256,29 +257,40 @@ app.post('/api/cancel-full-day-bookings', async (req, res) => {
 
     if (fError) throw fError;
 
-    // 2. บันทึกการหยุดร้านทั้งวันลงในตาราง admin_busy_times (ทำเสมอแม้ไม่มีคิว)
+    // 2. บันทึกการหยุดร้านทั้งวันลงในตาราง admin_busy_times
     const { error: iError } = await supabaseAdmin
       .from('admin_busy_times')
       .insert([{
         busy_date: date,
-        start_time: '09:00', // เวลาเริ่มต้นร้าน
-        end_time: '20:00',   // เวลาปิดร้าน
+        start_time: '09:00',
+        end_time: '20:00',
         is_full_day: true
       }]);
 
     if (iError) {
       console.error('Failed to record full day busy time:', iError.message);
-      return res.status(500).json({ error: 'ไม่สามารถบันทึกเวลาหยุดร้านได้ (ตรวจสอบว่าสร้างตาราง admin_busy_times หรือยัง): ' + iError.message });
+      return res.status(500).json({ error: 'ไม่สามารถบันทึกเวลาหยุดร้านได้: ' + iError.message });
     }
+
+    // --- ส่วนการจัดการข้อความแจ้งเตือน ---
+    
+    // แปลงวันที่จาก 2026-01-30 เป็น "30 มกราคม 2569"
+    const formattedDate = new Date(date).toLocaleDateString('th-TH', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
 
     if (!bookings || bookings.length === 0) {
-      return res.json({ success: true, message: 'ประกาศหยุดร้านเรียบร้อยแล้ว (ไม่มีคิวที่ถูกยกเลิก)', count: 0 });
+      return res.json({ success: true, message: `ประกาศหยุดร้านวันที่ ${formattedDate} เรียบร้อยแล้ว (ไม่มีคิวที่ถูกยกเลิก)`, count: 0 });
     }
 
-    const customMsg = `ขออภัยครับ วันนี้ร้านปิดหรือแอดมินติดธุระทั้งวัน จึงขออนุญาตยกเลิกคิวของคุณ และรบกวนจองเข้ามาใหม่ในวันอื่นที่สะดวกครับ 🙏`;
+    // กำหนดข้อความใหม่โดยใช้ formattedDate
+    const customMsg = `ขออภัยครับ ในวันที่ ${formattedDate} ร้านมีความจำเป็นต้องปิดทำการหรือติดธุระทั้งวัน จึงขออนุญาตยกเลิกคิวของคุณ และรบกวนจองเข้ามาใหม่ในวันอื่นที่สะดวกครับ 🙏`;
 
     let successCount = 0;
     for (const b of bookings) {
+      // อัปเดตสถานะเป็น Cancelled
       const { error: uError } = await supabaseAdmin
         .from('bookings')
         .update({ status: 'Cancelled' })
@@ -286,6 +298,7 @@ app.post('/api/cancel-full-day-bookings', async (req, res) => {
 
       if (!uError) {
         try {
+          // ส่ง LINE แจ้งเตือนลูกค้า
           await sendLineNotification(supabaseAdmin, b, customMsg);
           successCount++;
         } catch (err) {
@@ -294,7 +307,12 @@ app.post('/api/cancel-full-day-bookings', async (req, res) => {
       }
     }
 
-    res.json({ success: true, message: `ยกเลิกคิวทั้งวันและแจ้งเตือนเรียบร้อยแล้ว ${successCount} รายการ`, count: successCount });
+    res.json({ 
+      success: true, 
+      message: `ยกเลิกคิววันที่ ${formattedDate} และแจ้งเตือนเรียบร้อยแล้ว ${successCount} รายการ`, 
+      count: successCount 
+    });
+
   } catch (err) {
     console.error('Error in /api/cancel-full-day-bookings:', err.message);
     res.status(500).json({ error: 'Failed to process cancellation: ' + err.message });

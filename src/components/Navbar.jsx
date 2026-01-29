@@ -31,7 +31,7 @@ export default function Navbar() {
   const renderAuthButton = () => {
     if (loading) {
       return (
-        <div className="w-[120px] h-[48px] bg-zinc-800 rounded-full animate-pulse" />
+        <div className="w-30 h-12 bg-zinc-800 rounded-full animate-pulse" />
       );
     }
     if (isAuth) {
