@@ -57,7 +57,7 @@ export default function AdminLayout() {
       `}>
         {/* Logo Area */}
         <div className="h-20 flex items-center px-6 border-b border-white/10">
-          <Link to="/" className="flex items-center gap-2 font-serif font-bold text-xl text-white">
+          <Link to="/admin/dashboard" className="flex items-center gap-2 font-serif font-bold text-xl text-white">
             <Scissors className="text-amber-500" />
             <span>Admin Panel</span>
           </Link>

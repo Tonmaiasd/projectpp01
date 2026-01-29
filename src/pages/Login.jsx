@@ -46,7 +46,7 @@ export default function Login() {
   // --- State ---
   const [currentPage, setCurrentPage] = useState("login"); // 'login' or 'register'
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false); 
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Form Data
@@ -96,7 +96,7 @@ export default function Login() {
   // --- แก้ไขจุดที่ 1: Handle Input Change เพื่อกรองตัวเลขช่องเบอร์โทร ---
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
+
     if (name === "phone") {
       // ลบทุกอย่างที่ไม่ใช่ตัวเลข 0-9 ออกไปทันที
       const onlyNums = value.replace(/[^0-9]/g, '');
@@ -111,16 +111,16 @@ export default function Login() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!formData.name || !formData.password) {
-      setError("กรุณากรอกชื่อและรหัสผ่าน");
+    if (!formData.phone || !formData.password) {
+      setError("กรุณากรอกเบอร์โทรและรหัสผ่าน");
       return;
     }
     setLoading(true);
     setError(null);
     try {
-      await login(formData.name, formData.password);
+      await login(formData.phone, formData.password);
     } catch (err) {
-      setError("เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบข้อมูล");
+      setError("เข้าสู่ระบบไม่สำเร็จ เบอร์โทรหรือรหัสผ่านไม่ถูกต้อง");
       setLoading(false);
     }
   };
@@ -270,42 +270,43 @@ export default function Login() {
             )}
 
             <form onSubmit={currentPage === "login" ? handleLogin : handleRegister} className="space-y-5">
-              <div className="group">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
-                  </div>
-                  <input
-                    type="text"
-                    name="name"
-                    placeholder={currentPage === "login" ? "ชื่อของคุณ" : "ชื่อ-นามสกุล"}
-                    value={formData.name}
-                    onChange={handleChange}
-                    className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
-                  />
-                </div>
-              </div>
-
-              {/* --- แก้ไขจุดที่ 2: เพิ่ม inputMode="numeric" ในช่อง Phone --- */}
+              {/* --- Name Input (Register Only) --- */}
               {currentPage === "register" && (
-                <div className="group">
+                <div className="group animate-[slideDown_0.3s_ease-out]">
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Phone className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
+                      <User className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
                     </div>
                     <input
-                      type="tel"
-                      name="phone"
-                      inputMode="numeric"
-                      placeholder="เบอร์โทรศัพท์ (10 หลัก)"
-                      value={formData.phone}
+                      type="text"
+                      name="name"
+                      placeholder="ชื่อ-นามสกุล"
+                      value={formData.name}
                       onChange={handleChange}
-                      maxLength="10"
                       className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
                     />
                   </div>
                 </div>
               )}
+
+              {/* --- Phone Input (Login & Register) --- */}
+              <div className="group">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Phone className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
+                  </div>
+                  <input
+                    type="tel"
+                    name="phone"
+                    inputMode="numeric"
+                    placeholder="เบอร์โทรศัพท์ (10 หลัก)"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    maxLength="10"
+                    className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
+                  />
+                </div>
+              </div>
 
               <div className="group">
                 <div className="relative">

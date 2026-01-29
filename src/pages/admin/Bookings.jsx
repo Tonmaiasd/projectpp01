@@ -1,61 +1,96 @@
-import React, { useState, useEffect, useMemo, useContext } from 'react';
-import { useNavigate } from 'react-router-dom'; // 1. Import useNavigate
-import { Search, Filter, MoreHorizontal, CheckCircle, XCircle, Clock, Calendar, X, Plus, CalendarClock, ArrowLeft, MessageSquareText, Check, AlertCircle, Sparkles, ChevronLeft, ChevronRight, Scissors, Trash2 } from 'lucide-react'; // เพิ่ม ChevronLeft, ChevronRight, Scissors, Trash2
-import { supabase } from '../../supabase/client';
-import { AuthContext } from '../../context/AuthContext';
+import React, { useState, useEffect, useMemo, useContext } from "react";
+import { useNavigate } from "react-router-dom"; // 1. Import useNavigate
+import {
+  Search,
+  Filter,
+  MoreHorizontal,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Calendar,
+  X,
+  Plus,
+  CalendarClock,
+  ArrowLeft,
+  MessageSquareText,
+  Check,
+  AlertCircle,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  Scissors,
+  Trash2,
+} from "lucide-react"; // เพิ่ม ChevronLeft, ChevronRight, Scissors, Trash2
+import { supabase } from "../../supabase/client";
+import { AuthContext } from "../../context/AuthContext";
 
 export default function Bookings() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate(); // 2. เรียกใช้ Hook
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
   const [loading, setLoading] = useState(true);
-  const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
+  const [notification, setNotification] = useState({
+    show: false,
+    message: "",
+    type: "info",
+  });
   const [selectedSlot, setSelectedSlot] = useState(null);
 
-  const showNotification = (message, type = 'info') => {
+  const showNotification = (message, type = "info") => {
     setNotification({ show: true, message, type });
-    if (type === 'success') {
-      setTimeout(() => setNotification(prev => ({ ...prev, show: false })), 3000);
+    if (type === "success") {
+      setTimeout(
+        () => setNotification((prev) => ({ ...prev, show: false })),
+        3000,
+      );
     }
   };
-  const [realtimeStatus, setRealtimeStatus] = useState('connecting'); // 'connecting', 'connected', 'error'
+  const [realtimeStatus, setRealtimeStatus] = useState("connecting"); // 'connecting', 'connected', 'error'
 
   // --- State สำหรับ Modal Walk-in ---
   const [showWalkInModal, setShowWalkInModal] = useState(false);
-  const [walkInForm, setWalkInForm] = useState({ customer: '', service: '', date: new Date().toISOString().split('T')[0], time: '09:30', price: 0 });
+  const [walkInForm, setWalkInForm] = useState({
+    customer: "",
+    service: "",
+    date: new Date().toISOString().split("T")[0],
+    time: "09:30",
+    price: 0,
+  });
 
   // --- State สำหรับ Modal แอดมินไม่ว่าง/ปิดร้าน ---
   const [showBusyModal, setShowBusyModal] = useState(false);
   const [busyForm, setBusyForm] = useState({
-    mode: 'range',
-    date: new Date().toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
-    startTime: '13:00',
-    endTime: '15:00'
+    mode: "range",
+    date: new Date().toISOString().split("T")[0],
+    endDate: new Date().toISOString().split("T")[0],
+    startTime: "13:00",
+    endTime: "15:00",
   });
   const [isProcessingBusy, setIsProcessingBusy] = useState(false);
 
   // --- State สำหรับ Custom Confirmation Modal ---
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({
-    title: '',
-    message: '',
-    onConfirm: () => { },
-    type: 'warning' // 'warning' | 'danger' | 'info'
+    title: "",
+    message: "",
+    onConfirm: () => {},
+    type: "warning", // 'warning' | 'danger' | 'info'
   });
 
   // คำนวณวันที่สูงสุดที่เลือกได้ (2 สัปดาห์จากวันนี้)
   const maxClosureDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 14);
-    return d.toISOString().split('T')[0];
+    return d.toISOString().split("T")[0];
   }, []);
 
   // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 30 นาที)
   const timeSlots = useMemo(() => {
     const slots = [];
     for (let hour = 9; hour <= 20; hour++) {
-      const hStr = hour.toString().padStart(2, '0');
+      const hStr = hour.toString().padStart(2, "0");
       slots.push(`${hStr}:00`);
       if (hour < 20) {
         slots.push(`${hStr}:30`);
@@ -66,12 +101,12 @@ export default function Bookings() {
 
   // ฟังก์ชันหาเวลาถัดไป (Next Slot) ทุก 30 นาที
   const getNextSlot = (currentTime) => {
-    const [h, m] = currentTime.split(':').map(Number);
+    const [h, m] = currentTime.split(":").map(Number);
     if (m === 0) {
-      return `${h.toString().padStart(2, '0')}:30`;
+      return `${h.toString().padStart(2, "0")}:30`;
     } else {
       const nextHour = h + 1;
-      return `${nextHour.toString().padStart(2, '0')}:00`;
+      return `${nextHour.toString().padStart(2, "0")}:00`;
     }
   };
 
@@ -81,18 +116,26 @@ export default function Bookings() {
   // Helper สำหรับเปรียบเทียบเวลา (HH:mm)
   const isTimeMatch = (timeA, timeB) => {
     if (!timeA || !timeB) return false;
-    const normalize = (t) => t.split(':').slice(0, 2).join(':');
+    const normalize = (t) => t.split(":").slice(0, 2).join(":");
     return normalize(timeA) === normalize(timeB);
   };
 
   // Helper สำหรับดึง Booking ที่ "สำคัญที่สุด" ในกรณีที่มีหลายรายการในเวลาเดียวกัน
   const getPrioritizedBooking = (time) => {
-    const relevantBookings = bookings.filter(b => isTimeMatch(b.time, time));
+    const relevantBookings = bookings.filter((b) => isTimeMatch(b.time, time));
     if (relevantBookings.length === 0) return null;
 
     // ลำดับความสำคัญ: Pending > Completed > Confirmed > Cancelled
-    const priorityOrder = { 'Pending': 0, 'Completed': 1, 'Confirmed': 2, 'Cancelled': 3 };
-    return relevantBookings.sort((a, b) => (priorityOrder[a.status] ?? 99) - (priorityOrder[b.status] ?? 99))[0];
+    const priorityOrder = {
+      Pending: 0,
+      Completed: 1,
+      Confirmed: 2,
+      Cancelled: 3,
+    };
+    return relevantBookings.sort(
+      (a, b) =>
+        (priorityOrder[a.status] ?? 99) - (priorityOrder[b.status] ?? 99),
+    )[0];
   };
 
   // --- Reschedule Logic ---
@@ -100,19 +143,19 @@ export default function Bookings() {
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
   const [rescheduleData, setRescheduleData] = useState({
     bookingId: null,
-    date: '',
-    time: '',
-    currentDate: '',
-    currentTime: '',
-    serviceName: '',
-    maxDate: ''
+    date: "",
+    time: "",
+    currentDate: "",
+    currentTime: "",
+    serviceName: "",
+    maxDate: "",
   });
   const [rescheduleBookedSlots, setRescheduleBookedSlots] = useState([]);
   const [rescheduleAdminBusySlots, setRescheduleAdminBusySlots] = useState([]);
 
   // Open Reschedule Modal
   const handleReschedule = (bookingId) => {
-    const booking = bookings.find(b => b.id === bookingId);
+    const booking = bookings.find((b) => b.id === bookingId);
     if (!booking) return;
 
     const today = new Date();
@@ -121,12 +164,12 @@ export default function Bookings() {
 
     setRescheduleData({
       bookingId: booking.id,
-      date: booking.date || today.toISOString().split('T')[0],
-      time: '',
+      date: booking.date || today.toISOString().split("T")[0],
+      time: "",
       currentDate: booking.date,
       currentTime: booking.time,
       serviceName: booking.service,
-      maxDate: max.toISOString().split('T')[0]
+      maxDate: max.toISOString().split("T")[0],
     });
 
     setShowRescheduleModal(true);
@@ -139,19 +182,21 @@ export default function Bookings() {
     const fetchAvailability = async () => {
       // 1. Fetch Bookings
       const { data: bookingsData } = await supabase
-        .from('bookings')
-        .select('booking_time, status')
-        .eq('booking_date', rescheduleData.date)
-        .in('status', ['Pending', 'Confirmed', 'Completed']);
+        .from("bookings")
+        .select("booking_time, status")
+        .eq("booking_date", rescheduleData.date)
+        .in("status", ["Pending", "Confirmed", "Completed"]);
 
-      const busyTimes = bookingsData ? bookingsData.map(b => b.booking_time) : [];
+      const busyTimes = bookingsData
+        ? bookingsData.map((b) => b.booking_time)
+        : [];
       setRescheduleBookedSlots(busyTimes);
 
       // 2. Fetch Admin Busy Times
       const { data: busyData } = await supabase
-        .from('admin_busy_times')
-        .select('*')
-        .eq('busy_date', rescheduleData.date);
+        .from("admin_busy_times")
+        .select("*")
+        .eq("busy_date", rescheduleData.date);
 
       setRescheduleAdminBusySlots(busyData || []);
     };
@@ -168,21 +213,24 @@ export default function Bookings() {
 
     setRescheduleLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/admin-reschedule-booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId: rescheduleData.bookingId,
-          newDate: rescheduleData.date,
-          newTime: rescheduleData.time,
-          oldDate: rescheduleData.currentDate,
-          oldTime: rescheduleData.currentTime,
-          serviceName: rescheduleData.serviceName
-        })
-      });
+      const response = await fetch(
+        "http://localhost:3001/api/admin-reschedule-booking",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookingId: rescheduleData.bookingId,
+            newDate: rescheduleData.date,
+            newTime: rescheduleData.time,
+            oldDate: rescheduleData.currentDate,
+            oldTime: rescheduleData.currentTime,
+            serviceName: rescheduleData.serviceName,
+          }),
+        },
+      );
 
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Failed to reschedule');
+      if (!response.ok) throw new Error(result.error || "Failed to reschedule");
 
       showNotification(result.message, "success");
       setShowRescheduleModal(false);
@@ -199,26 +247,28 @@ export default function Bookings() {
     if (!supabase) return;
     if (!isSilent) setLoading(true);
     const { data: bookingsData, error } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('booking_date', selectedDate)
-      .order('booking_time', { ascending: true });
+      .from("bookings")
+      .select("*")
+      .eq("booking_date", selectedDate)
+      .order("booking_time", { ascending: true });
 
     if (error) {
-      console.error('Error fetching bookings:', error);
+      console.error("Error fetching bookings:", error);
       if (!isSilent) setLoading(false);
       return;
     }
 
     // Fetch profiles for bookings that have user_id
-    const userIds = [...new Set(bookingsData.filter(b => b.user_id).map(b => b.user_id))];
+    const userIds = [
+      ...new Set(bookingsData.filter((b) => b.user_id).map((b) => b.user_id)),
+    ];
     let profilesMap = {};
 
     if (userIds.length > 0) {
       const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone')
-        .in('id', userIds);
+        .from("profiles")
+        .select("id, full_name, phone")
+        .in("id", userIds);
 
       if (profilesData) {
         profilesMap = profilesData.reduce((acc, p) => {
@@ -234,7 +284,10 @@ export default function Bookings() {
     const mapped = data.map((b) => ({
       id: b.id,
       // ดึงชื่อจาก profiles table เป็นหลัก (ชื่อล่าสุด) ถ้าไม่มีค่อยใช้ customer_name ที่บันทึกไว้
-      customer: profilesMap[b.user_id]?.full_name || b.customer_name || (b.user_id ? String(b.user_id).slice(0, 8) + '…' : '-'),
+      customer:
+        profilesMap[b.user_id]?.full_name ||
+        b.customer_name ||
+        (b.user_id ? String(b.user_id).slice(0, 8) + "…" : "-"),
       service: b.service_name,
       date: b.booking_date,
       time: b.booking_time,
@@ -251,17 +304,17 @@ export default function Bookings() {
     if (!supabase) return;
     try {
       const { data, error } = await supabase
-        .from('services')
-        .select('id, name, price')
-        .order('name');
+        .from("services")
+        .select("id, name, price")
+        .order("name");
 
       if (error) {
-        console.error('Error fetching services:', error);
+        console.error("Error fetching services:", error);
       } else {
         setServices(data || []);
       }
     } catch (err) {
-      console.error('Error fetching services:', err);
+      console.error("Error fetching services:", err);
     }
   };
 
@@ -276,38 +329,38 @@ export default function Bookings() {
       const now = new Date();
       const currentH = now.getHours();
       const currentM = now.getMinutes();
-      const currentTime = `${currentH.toString().padStart(2, '0')}:${currentM < 30 ? '00' : '30'}`;
+      const currentTime = `${currentH.toString().padStart(2, "0")}:${currentM < 30 ? "00" : "30"}`;
 
       // ถ้าเวลาปัจจุบันอยู่ในช่วง 09:00 - 20:00 ให้เลือกเวลาปัจจุบัน
       if (timeSlots.includes(currentTime)) {
         setSelectedSlot(currentTime);
       } else {
-        setSelectedSlot('09:00');
+        setSelectedSlot("09:00");
       }
     }
   }, [loading, selectedDate, timeSlots, selectedSlot]);
 
   useEffect(() => {
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel("schema-db-changes")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*', // Listen to INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'bookings'
+          event: "*", // Listen to INSERT, UPDATE, DELETE
+          schema: "public",
+          table: "bookings",
         },
         (payload) => {
-          console.log('Realtime change received:', payload);
+          console.log("Realtime change received:", payload);
           fetchBookings(true); // Silent update
-        }
+        },
       )
       .subscribe((status) => {
-        console.log('Subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          setRealtimeStatus('connected');
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-          setRealtimeStatus('error');
+        console.log("Subscription status:", status);
+        if (status === "SUBSCRIBED") {
+          setRealtimeStatus("connected");
+        } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+          setRealtimeStatus("error");
         }
       });
 
@@ -321,70 +374,75 @@ export default function Bookings() {
     try {
       if (supabase) {
         const { error } = await supabase
-          .from('bookings')
+          .from("bookings")
           .update({ status: newStatus })
-          .eq('id', id);
+          .eq("id", id);
         if (error) throw error;
       }
 
       setBookings((prevBookings) =>
         prevBookings.map((booking) =>
-          booking.id === id ? { ...booking, status: newStatus } : booking
-        )
+          booking.id === id ? { ...booking, status: newStatus } : booking,
+        ),
       );
-
     } catch (err) {
-      console.error('Error updating status:', err);
-      showNotification('ไม่สามารถอัปเดตสถานะได้', "error");
+      console.error("Error updating status:", err);
+      showNotification("ไม่สามารถอัปเดตสถานะได้", "error");
     }
   };
 
   // Helper function: บวกเวลาเพิ่ม (นาที)
   const addMinutesToTime = (timeStr, minutesToAdd) => {
-    const [hours, mins] = timeStr.split(':').map(Number);
+    const [hours, mins] = timeStr.split(":").map(Number);
     const date = new Date();
     date.setHours(hours);
     date.setMinutes(mins + minutesToAdd);
 
-    const newHours = String(date.getHours()).padStart(2, '0');
-    const newMins = String(date.getMinutes()).padStart(2, '0');
+    const newHours = String(date.getHours()).padStart(2, "0");
+    const newMins = String(date.getMinutes()).padStart(2, "0");
     return `${newHours}:${newMins}`;
   };
 
-
-
   // 3. ฟังก์ชันบันทึก Walk-in
-  const handleWalkInSubmit = async (e) => {
+const handleWalkInSubmit = async (e) => {
     e.preventDefault();
-    if (!walkInForm.customer || !walkInForm.service || !walkInForm.time || !walkInForm.price) {
+
+    // เช็คแค่ เวลา และ ราคา (ตามที่คุณต้องการ)
+    if (!walkInForm.time || !walkInForm.price) {
       showNotification("กรุณากรอกข้อมูลให้ครบถ้วน", "warning");
       return;
     }
 
     const newBooking = {
-      user_id: user?.id, // ใช้ ID ของแอดมินที่ล็อกอินอยู่
-      customer_name: walkInForm.customer, // บันทึกชื่อลูกค้าลง DB
-      service_name: walkInForm.service,
+      user_id: user?.id,
+      // ใส่ค่า Default ลงไป เพื่อไม่ให้ Database Error
+      customer_name: "-",           // ใส่ขีดแทน
+      service_name: "Walk-in",      // ใส่คำว่า Walk-in แทน
       booking_date: walkInForm.date,
       booking_time: walkInForm.time,
       price: Number(walkInForm.price),
-      status: "Completed" // เป็น Completed ทันทีตามต้องการ
+      status: "Completed",
     };
 
     try {
       if (supabase) {
         const { data, error } = await supabase
-          .from('bookings')
+          .from("bookings")
           .insert([newBooking])
-          .select('*')
+          .select("*")
           .single();
-        if (error) throw error;
+          
+        if (error) {
+            // Log Error ออกมาดูชัดๆ ถ้ายังไม่ได้อีก
+            console.error("Supabase Error:", error.message, error.details);
+            throw error;
+        }
 
-        // เพิ่มเข้าหน้า UI ทันที
+        // อัปเดต UI
         setBookings((prev) => [
           {
             id: data.id,
-            customer: walkInForm.customer || '-',
+            customer: data.customer_name, 
             service: data.service_name,
             date: data.booking_date,
             time: data.booking_time,
@@ -397,17 +455,16 @@ export default function Bookings() {
         ]);
       }
     } catch (err) {
-      console.error('Error inserting walk-in booking:', err);
-      showNotification('ไม่สามารถบันทึกคิว Walk-in ได้', "error");
+      console.error("Error inserting walk-in booking:", err);
+      showNotification("ไม่สามารถบันทึกคิว Walk-in ได้: " + (err.message || ""), "error");
       return;
     }
+
     setShowWalkInModal(false);
     setWalkInForm({
-      customer: '',
-      service: '',
-      date: new Date().toISOString().split('T')[0],
-      time: '',
-      price: ''
+      date: new Date().toISOString().split("T")[0],
+      time: "",
+      price: "",
     });
     showNotification("เพิ่มคิว Walk-in เรียบร้อยแล้ว", "success");
   };
@@ -416,17 +473,18 @@ export default function Bookings() {
   const handleNotifyNextQueue = async () => {
     setNotifyingNextQueue(true);
     try {
-      const response = await fetch('http://localhost:3001/api/next-queue', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+      const response = await fetch("http://localhost:3001/api/next-queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
 
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Failed to notify next queue');
+      if (!response.ok)
+        throw new Error(result.error || "Failed to notify next queue");
 
       showNotification(result.message, "success");
     } catch (error) {
-      console.error('Error notifying next queue:', error);
+      console.error("Error notifying next queue:", error);
       showNotification(error.message, "error");
     } finally {
       setNotifyingNextQueue(false);
@@ -437,18 +495,19 @@ export default function Bookings() {
   const handleNotifyBooking = async (bookingId) => {
     if (!bookingId) return;
     try {
-      const response = await fetch('http://localhost:3001/api/notify-booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("http://localhost:3001/api/notify-booking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ booking_id: String(bookingId) }),
       });
 
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Failed to notify customer');
+      if (!response.ok)
+        throw new Error(result.error || "Failed to notify customer");
 
       showNotification(result.message, "success");
     } catch (error) {
-      console.error('Error notifying customer:', error);
+      console.error("Error notifying customer:", error);
       showNotification(error.message, "error");
     }
   };
@@ -459,19 +518,19 @@ export default function Bookings() {
     const confirmEndDate = busyForm.endDate;
 
     let confirmMsg = "";
-    if (busyForm.mode === 'full') {
+    if (busyForm.mode === "full") {
       confirmMsg = `ต้องการยกเลิกคิวทั้งหมดในวันที่ ${confirmDate} ใช่หรือไม่?`;
-    } else if (busyForm.mode === 'multi') {
+    } else if (busyForm.mode === "multi") {
       confirmMsg = `ต้องการยกเลิกคิวทั้งหมดตั้งแต่วันที่ ${confirmDate} ถึง ${confirmEndDate} ใช่หรือไม่?`;
     } else {
       confirmMsg = `ต้องการยกเลิกคิวในช่วงเวลา ${busyForm.startTime} - ${busyForm.endTime} ของวันที่ ${confirmDate} ใช่หรือไม่?`;
     }
 
     setConfirmConfig({
-      title: 'ยืนยันการดำเนินการ',
+      title: "ยืนยันการดำเนินการ",
       message: confirmMsg,
       onConfirm: () => executeBusySubmit(confirmDate, confirmEndDate),
-      type: 'danger'
+      type: "danger",
     });
     setShowConfirmModal(true);
   };
@@ -480,34 +539,42 @@ export default function Bookings() {
     setShowConfirmModal(false);
     setIsProcessingBusy(true);
     try {
-      let endpoint = '';
+      let endpoint = "";
       let body = {};
 
-      if (busyForm.mode === 'full') {
-        endpoint = 'http://localhost:3001/api/cancel-full-day-bookings';
+      if (busyForm.mode === "full") {
+        endpoint = "http://localhost:3001/api/cancel-full-day-bookings";
         body = { date: confirmDate };
-      } else if (busyForm.mode === 'multi') {
-        endpoint = 'http://localhost:3001/api/cancel-multi-day-bookings';
+      } else if (busyForm.mode === "multi") {
+        endpoint = "http://localhost:3001/api/cancel-multi-day-bookings";
         body = { startDate: confirmDate, endDate: confirmEndDate };
       } else {
-        endpoint = 'http://localhost:3001/api/cancel-time-range-bookings';
-        body = { date: confirmDate, startTime: busyForm.startTime, endTime: busyForm.endTime };
+        endpoint = "http://localhost:3001/api/cancel-time-range-bookings";
+        body = {
+          date: confirmDate,
+          startTime: busyForm.startTime,
+          endTime: busyForm.endTime,
+        };
       }
 
       const response = await fetch(endpoint, {
-        method: 'POST', // Corrected: Using POST as per backend
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        method: "POST", // Corrected: Using POST as per backend
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
       });
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Server error (${response.status}): ${errorText.slice(0, 100)}...`);
+        throw new Error(
+          `Server error (${response.status}): ${errorText.slice(0, 100)}...`,
+        );
       }
 
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
-        throw new Error("เซิร์ฟเวอร์ไม่ได้ตอบกลับเป็น JSON กรุณารีสตาร์ทเซิร์ฟเวอร์หลังบ้านครับ");
+        throw new Error(
+          "เซิร์ฟเวอร์ไม่ได้ตอบกลับเป็น JSON กรุณารีสตาร์ทเซิร์ฟเวอร์หลังบ้านครับ",
+        );
       }
 
       const result = await response.json();
@@ -515,7 +582,7 @@ export default function Bookings() {
       setShowBusyModal(false);
       fetchBookings(); // รีเฟรชข้อมูล
     } catch (error) {
-      console.error('Busy submit error:', error);
+      console.error("Busy submit error:", error);
       showNotification(error.message, "error");
     } finally {
       setIsProcessingBusy(false);
@@ -529,13 +596,13 @@ export default function Bookings() {
   const handlePreviousDay = () => {
     const currentDate = new Date(selectedDate);
     currentDate.setDate(currentDate.getDate() - 1);
-    setSelectedDate(currentDate.toISOString().split('T')[0]);
+    setSelectedDate(currentDate.toISOString().split("T")[0]);
   };
 
   const handleNextDay = () => {
     const currentDate = new Date(selectedDate);
     currentDate.setDate(currentDate.getDate() + 1);
-    setSelectedDate(currentDate.toISOString().split('T')[0]);
+    setSelectedDate(currentDate.toISOString().split("T")[0]);
   };
 
   // ฟอร์แมตวันที่เป็นภาษาไทย (พ.ศ. format)
@@ -550,12 +617,14 @@ export default function Bookings() {
   const getStatusBadge = (status) => {
     const styles = {
       Completed: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
-      Pending: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+      Pending: "bg-amber-400/10 text-amber-400 border-amber-400/20",
       Confirmed: "bg-blue-500/10 text-blue-500 border-blue-500/20",
       Cancelled: "bg-red-500/10 text-red-500 border-red-500/20",
     };
     return (
-      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${styles[status] || styles.Pending}`}>
+      <span
+        className={`px-3 py-1 rounded-full text-xs font-bold border ${styles[status] || styles.Pending}`}
+      >
         {status}
       </span>
     );
@@ -568,7 +637,7 @@ export default function Bookings() {
         <div className="flex items-center gap-4">
           {/* ปุ่มย้อนกลับไป Dashboard */}
           <button
-            onClick={() => navigate('/admin/dashboard')}
+            onClick={() => navigate("/admin/dashboard")}
             className="p-2 bg-zinc-900 border border-white/10 rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
             title="กลับไปหน้า Dashboard"
           >
@@ -579,22 +648,36 @@ export default function Bookings() {
             <h1 className="text-3xl font-serif font-bold text-white tracking-tight flex items-center gap-3">
               จัดการการจอง
               <div
-                className={`w-2.5 h-2.5 rounded-full ${realtimeStatus === 'connected' ? 'bg-green-500 shadow-[0_0_10px_#22c55e]' :
-                  realtimeStatus === 'error' ? 'bg-red-500 shadow-[0_0_10px_#ef4444]' :
-                    'bg-yellow-500 animate-pulse'
-                  }`}
-                title={realtimeStatus === 'connected' ? 'เชื่อมต่อ Real-time แล้ว' : realtimeStatus === 'error' ? 'การเชื่อมต่อขัดข้อง' : 'กำลังเชื่อมต่อ...'}
+                className={`w-2.5 h-2.5 rounded-full ${
+                  realtimeStatus === "connected"
+                    ? "bg-green-500 shadow-[0_0_10px_#22c55e]"
+                    : realtimeStatus === "error"
+                      ? "bg-red-500 shadow-[0_0_10px_#ef4444]"
+                      : "bg-yellow-500 animate-pulse"
+                }`}
+                title={
+                  realtimeStatus === "connected"
+                    ? "เชื่อมต่อ Real-time แล้ว"
+                    : realtimeStatus === "error"
+                      ? "การเชื่อมต่อขัดข้อง"
+                      : "กำลังเชื่อมต่อ..."
+                }
               />
             </h1>
-            <p className="text-zinc-400 text-lg">ตรวจสอบและจัดการคิวลูกค้าทั้งหมด</p>
+            <p className="text-zinc-400 text-lg">
+              ตรวจสอบและจัดการคิวลูกค้าทั้งหมด
+            </p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-2">
-
           <button
             onClick={() => {
-              setBusyForm(prev => ({ ...prev, date: selectedDate, endDate: selectedDate }));
+              setBusyForm((prev) => ({
+                ...prev,
+                date: selectedDate,
+                endDate: selectedDate,
+              }));
               setShowBusyModal(true);
             }}
             className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-1.5 active:scale-95"
@@ -644,14 +727,18 @@ export default function Bookings() {
 
       {/* NEW Two-Pane Layout */}
       <div className="flex flex-col xl:flex-row gap-8 items-start">
-
         {/* --- Left Pane: Time Grid Sidebar --- */}
-        <div className="w-full xl:w-95 bg-zinc-900/50 backdrop-blur-md rounded-2xl p-4 border border-white/5 shadow-2xl shrink-0">
+        <div className="w-full xl:flex-9 bg-zinc-900/50 backdrop-blur-md rounded-2xl p-4 border border-white/5 shadow-2xl shrink-0">
           <div className="flex items-center gap-3 mb-4 px-2">
             <div className="p-1.5 bg-amber-500/10 rounded-lg">
               <Clock className="text-amber-500" size={18} />
             </div>
-            <h2 className="text-lg font-black text-white tracking-tight">ตารางเวลา <span className="text-zinc-500 text-[10px] font-bold ml-1 uppercase">Today's Slots</span></h2>
+            <h2 className="text-3xl font-black text-white tracking-tight">
+              ตารางเวลา{" "}
+              <span className="text-white text-[10px] font-bold ml-1 uppercase">
+                (Today's Slots)
+              </span>
+            </h2>
           </div>
 
           <div className="grid grid-cols-4 gap-2">
@@ -659,31 +746,59 @@ export default function Bookings() {
               const bookingAtSlot = getPrioritizedBooking(time);
               const isSelected = selectedSlot === time;
               const isBooked = !!bookingAtSlot;
+              const status = bookingAtSlot?.status;
+
+              // 1. กำหนดสีตามสถานะ (ฟังก์ชันช่วยเลือกสี)
+              let statusStyles = "";
+
+              if (isSelected) {
+                // สถานะ: กำลังเลือก (สีส้มทึบ เด่นที่สุด)
+                statusStyles =
+                  "bg-amber-500 border-amber-400 text-black shadow-[0_0_12px_rgba(245,158,11,0.25)] z-10";
+              } else if (isBooked) {
+                // สถานะ: จองแล้ว (แยกสีตาม Status)
+                switch (status) {
+                  case "Completed": // สีเขียวจางๆ
+                    statusStyles =
+                      "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:border-emerald-500/50";
+                    break;
+                  case "Cancelled": // สีแดงจางๆ
+                    statusStyles =
+                      "bg-red-500/10 border-red-500/20 text-red-500 hover:border-red-500/50";
+                    break;
+                  default: // สถานะอื่นๆ (เช่น Pending) เป็นสีเหลือง/ส้มจางๆ
+                    statusStyles =
+                      "bg-amber-400/10 border-amber-400/20 text-amber-400 hover:border-amber-400/40";
+                    break;
+                }
+              } else {
+                // สถานะ: ว่าง (สีเทาปกติ)
+                statusStyles =
+                  "bg-zinc-950/50 border-white/5 text-zinc-500 hover:border-white/20";
+              }
 
               return (
                 <button
                   key={time}
                   onClick={() => setSelectedSlot(time)}
-                  className={`relative h-14 rounded-xl flex flex-col items-center justify-center transition-all active:scale-95 border-2 ${isSelected
-                    ? 'bg-amber-500 border-amber-400 text-black shadow-[0_0_12px_rgba(245,158,11,0.25)] z-10'
-                    : isBooked
-                      ? bookingAtSlot.status === 'Cancelled'
-                        ? 'bg-red-500/10 border-red-500/20 text-red-500 hover:border-red-500/50'
-                        : 'bg-zinc-800/80 border-white/10 text-white hover:border-amber-500/50'
-                      : 'bg-zinc-950/50 border-white/5 text-zinc-500 hover:border-white/20'
-                    }`}
+                  className={`relative h-18 rounded-xl flex flex-col items-center justify-center transition-all active:scale-95 border-2 ${statusStyles}`}
                 >
-                  <span className={`text-base font-black font-num ${isSelected ? 'text-black' : isBooked ? bookingAtSlot.status === 'Cancelled' ? 'text-red-400' : 'text-white' : 'text-zinc-500'}`}>
-                    {time}
-                  </span>
+                  <span className="text-3xl font-black font-num">{time}</span>
+
+                  {/* จุดสีแจ้งเตือน (Status Dot) - ยังคงไว้เหมือนเดิมหรือปรับสีตามต้องการ */}
                   {isBooked && !isSelected && (
-                    <div className={`absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full shadow-lg ${bookingAtSlot.status === 'Completed'
-                      ? 'bg-emerald-500 shadow-emerald-500/50'
-                      : bookingAtSlot.status === 'Cancelled'
-                        ? 'bg-red-500 shadow-red-500/50'
-                        : 'bg-orange-500 shadow-orange-500/50'
-                      }`} />
+                    <div
+                      className={`absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full shadow-lg ${
+                        status === "Completed"
+                          ? "bg-emerald-500 shadow-emerald-500/50"
+                          : status === "Cancelled"
+                            ? "bg-red-500 shadow-red-500/50"
+                            : "bg-amber-400 shadow-amber-500/50"
+                      }`}
+                    />
                   )}
+
+                  {/* ขีดเส้นใต้เมื่อเลือก */}
                   {isSelected && (
                     <div className="absolute -bottom-1 w-8 h-1 bg-black rounded-full" />
                   )}
@@ -694,24 +809,24 @@ export default function Bookings() {
 
           <div className="mt-8 flex flex-col gap-3 px-2">
             <div className="flex items-center gap-3 text-sm font-bold">
-              <div className="w-4 h-4 rounded-md bg-zinc-800 border border-white/10" />
+              <div className="w-5 h-5 rounded-md bg-zinc-800 border border-white/10" />
               <span className="text-zinc-400">ว่าง / Available</span>
             </div>
             <div className="flex items-center gap-3 text-sm font-bold">
-              <div className="w-4 h-4 rounded-md bg-zinc-800 border border-white/10 relative flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shadow-[0_0_5px_rgba(249,115,22,0.5)]" />
+              <div className="w-5 h-5 rounded-md bg-zinc-800 border border-white/10 relative flex items-center justify-center">
+                <div className="w-3.5 h-3.5 rounded-full bg-amber-300 shadow-[0_0_5px_rgba(249,115,22,0.5)]" />
               </div>
               <span className="text-zinc-400">มีคนจอง / Booked</span>
             </div>
             <div className="flex items-center gap-3 text-sm font-bold">
-              <div className="w-4 h-4 rounded-md bg-zinc-800 border border-white/10 relative flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
+              <div className="w-5 h-5 rounded-md bg-zinc-800 border border-white/10 relative flex items-center justify-center">
+                <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
               </div>
               <span className="text-zinc-400">เสร็จสิ้น / Completed</span>
             </div>
             <div className="flex items-center gap-3 text-sm font-bold">
-              <div className="w-4 h-4 rounded-md bg-zinc-800 border border-white/10 relative flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />
+              <div className="w-5 h-5 rounded-md bg-zinc-800 border border-white/10 relative flex items-center justify-center">
+                <div className="w-3.5 h-3.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />
               </div>
               <span className="text-zinc-400">ยกเลิก / Cancelled</span>
             </div>
@@ -719,17 +834,14 @@ export default function Bookings() {
         </div>
 
         {/* --- Right Pane: Detail View Card --- */}
-        <div className="flex-1 w-full min-h-125">
+        <div className="xl:flex-1 w-full min-h-125">
           {loading ? (
             <div className="h-full min-h-125 flex flex-col items-center justify-center bg-zinc-900/30 rounded-[3rem] border border-white/5">
               <div className="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-4"></div>
               <p className="text-zinc-500 font-bold">กำลังอัปเดตข้อมูล...</p>
             </div>
           ) : (
-            <div
-              key={selectedSlot}
-              className="animate-[fadeIn_0.4s_ease-out]"
-            >
+            <div key={selectedSlot} className="animate-[fadeIn_0.4s_ease-out]">
               {selectedSlot ? (
                 (() => {
                   const booking = getPrioritizedBooking(selectedSlot);
@@ -744,21 +856,29 @@ export default function Bookings() {
                           {/* Header Detail */}
                           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 pb-4 border-b border-white/5">
                             <div className="flex items-center gap-4">
-                              <div className="w-16 h-16 rounded-xl bg-zinc-800 flex items-center justify-center text-2xl font-black text-zinc-600 border border-white/10 shadow-inner">
+                              <div className="w-16 h-16 rounded-xl bg-zinc-800 flex items-center justify-center text-2xl font-black text-white border border-white/10 shadow-inner">
                                 #{booking.id}
                               </div>
                               <div>
                                 <div className="flex items-center gap-2 mb-0.5">
                                   {getStatusBadge(booking.status)}
-                                  <span className="text-zinc-500 text-[9px] font-black uppercase tracking-widest">Selected Client</span>
+                                  <span className="text-white text-[9px] font-black uppercase tracking-widest">
+                                    Selected Client
+                                  </span>
                                 </div>
-                                <h3 className="text-3xl font-black text-white tracking-tight">{booking.customer}</h3>
+                                <h3 className="text-3xl font-black text-white tracking-tight">
+                                  {booking.customer}
+                                </h3>
                               </div>
                             </div>
 
                             <div className="flex flex-col items-end bg-black/40 px-5 py-2.5 rounded-xl border border-white/5">
-                              <span className="text-zinc-500 text-[9px] font-black uppercase mb-0.5">Total Amount</span>
-                              <span className="text-2xl font-black text-amber-500 font-num">฿{booking.price}</span>
+                              <span className="text-white text-[9px] font-black uppercase mb-0.5">
+                                Total Amount
+                              </span>
+                              <span className="text-2xl font-black text-amber-500 font-num">
+                                ฿{booking.price}
+                              </span>
                             </div>
                           </div>
 
@@ -766,26 +886,41 @@ export default function Bookings() {
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Time Card */}
                             <div className="bg-zinc-950/50 rounded-xl p-5 border border-white/5 shadow-xl">
-                              <div className="flex items-center gap-2 text-zinc-500 font-black mb-2 px-1">
+                              <div className="flex items-center gap-2 text-white font-black mb-2 px-1">
                                 <Calendar size={16} />
-                                <span className="text-[9px] uppercase tracking-widest">Appointed Time</span>
-                              </div>
-                              <div className="flex items-center gap-3 text-amber-500">
-                                <Clock size={28} strokeWidth={2.5} className="drop-shadow-[0_0_8px_rgba(245,158,11,0.25)]" />
-                                <span className="text-4xl font-black font-num tracking-tighter">
-                                  {booking.time} <span className="text-base font-bold ml-0.5">น.</span>
+                                <span className="text-[9px] uppercase tracking-widest">
+                                  Appointed Time
                                 </span>
                               </div>
-                              <p className="mt-2 text-zinc-400 text-sm font-bold px-1">{booking.date}</p>
+                              <div className="flex items-center gap-3 text-amber-500">
+                                <Clock
+                                  size={28}
+                                  strokeWidth={2.5}
+                                  className="drop-shadow-[0_0_8px_rgba(245,158,11,0.25)]"
+                                />
+                                <span className="text-xl font-black font-num tracking-tighter">
+                                  {booking.time}{" "}
+                                  <span className="text-base font-bold ml-0.5">
+                                    น.
+                                  </span>
+                                </span>
+                              </div>
+                              <p className="mt-2 text-zinc-400 text-sm font-bold px-1">
+                                {booking.date}
+                              </p>
                             </div>
 
                             {/* Service Card */}
                             <div className="bg-zinc-950/50 rounded-xl p-5 border border-white/5 shadow-xl flex flex-col justify-center">
-                              <div className="flex items-center gap-2 text-zinc-500 font-black mb-2 px-1">
+                              <div className="flex items-center gap-2 text-white font-black mb-2 px-1">
                                 <Sparkles size={16} />
-                                <span className="text-[9px] uppercase tracking-widest">Service Item</span>
+                                <span className="text-[9px] uppercase tracking-widest">
+                                  Service Item
+                                </span>
                               </div>
-                              <h4 className="text-xl font-black text-white px-1 truncate">{booking.service}</h4>
+                              <h4 className="text-xl font-black text-white px-1 truncate">
+                                {booking.service}
+                              </h4>
                               {booking.applied_promo && (
                                 <div className="mt-2 ml-1 w-fit bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest">
                                   {booking.applied_promo}
@@ -798,50 +933,70 @@ export default function Bookings() {
                           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-2 mt-1">
                             <button
                               onClick={() => handleNotifyBooking(booking.id)}
-                              disabled={booking.status !== 'Pending'}
-                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${booking.status === 'Pending'
-                                ? 'bg-sky-500/5 border-sky-500/20 text-sky-400 hover:bg-sky-500 hover:text-white shadow-xl hover:shadow-sky-500/20'
-                                : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed'
-                                }`}
+                              disabled={booking.status !== "Pending"}
+                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${
+                                booking.status === "Pending"
+                                  ? "bg-sky-500/5 border-sky-500/20 text-sky-400 hover:bg-sky-500 hover:text-white shadow-xl hover:shadow-sky-500/20"
+                                  : "bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed"
+                              }`}
                             >
                               <MessageSquareText size={24} />
-                              <span className="text-[9px] font-black uppercase tracking-widest">แจ้งเตือน</span>
+                              <span className="text-[9px] font-black uppercase tracking-widest">
+                                แจ้งเตือน
+                              </span>
                             </button>
 
                             <button
                               onClick={() => handleReschedule(booking.id)}
-                              disabled={booking.status === 'Cancelled' || booking.status === 'Completed'}
-                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${booking.status === 'Pending' || booking.status === 'Confirmed'
-                                ? 'bg-blue-500/5 border-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white shadow-xl hover:shadow-blue-500/20'
-                                : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed'
-                                }`}
+                              disabled={
+                                booking.status === "Cancelled" ||
+                                booking.status === "Completed"
+                              }
+                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${
+                                booking.status === "Pending" ||
+                                booking.status === "Confirmed"
+                                  ? "bg-blue-500/5 border-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-white shadow-xl hover:shadow-blue-500/20"
+                                  : "bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed"
+                              }`}
                             >
                               <CalendarClock size={24} />
-                              <span className="text-[9px] font-black uppercase tracking-widest">เลื่อนคิว</span>
+                              <span className="text-[9px] font-black uppercase tracking-widest">
+                                เลื่อนคิว
+                              </span>
                             </button>
 
                             <button
-                              onClick={() => handleUpdateStatus(booking.id, 'Cancelled')}
-                              disabled={booking.status !== 'Pending'}
-                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${booking.status === 'Pending'
-                                ? 'bg-red-500/5 border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white shadow-xl hover:shadow-red-500/20'
-                                : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed'
-                                }`}
+                              onClick={() =>
+                                handleUpdateStatus(booking.id, "Cancelled")
+                              }
+                              disabled={booking.status !== "Pending"}
+                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${
+                                booking.status === "Pending"
+                                  ? "bg-red-500/5 border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white shadow-xl hover:shadow-red-500/20"
+                                  : "bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed"
+                              }`}
                             >
                               <XCircle size={24} />
-                              <span className="text-[9px] font-black uppercase tracking-widest">ยกเลิก</span>
+                              <span className="text-[9px] font-black uppercase tracking-widest">
+                                ยกเลิก
+                              </span>
                             </button>
 
                             <button
-                              onClick={() => handleUpdateStatus(booking.id, 'Completed')}
-                              disabled={booking.status !== 'Pending'}
-                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${booking.status === 'Pending'
-                                ? 'bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.25)]'
-                                : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed'
-                                }`}
+                              onClick={() =>
+                                handleUpdateStatus(booking.id, "Completed")
+                              }
+                              disabled={booking.status !== "Pending"}
+                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${
+                                booking.status === "Pending"
+                                  ? "bg-emerald-500 text-black border-emerald-400 hover:bg-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.25)]"
+                                  : "bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed"
+                              }`}
                             >
                               <Check size={32} strokeWidth={4} />
-                              <span className="text-[10px] font-black uppercase tracking-widest leading-none">เสร็จสิ้น</span>
+                              <span className="text-[10px] font-black uppercase tracking-widest leading-none">
+                                เสร็จสิ้น
+                              </span>
                             </button>
                           </div>
                         </div>
@@ -853,7 +1008,9 @@ export default function Bookings() {
                         <div className="w-24 h-24 bg-zinc-800 rounded-full flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                           <Clock size={40} className="text-zinc-600" />
                         </div>
-                        <h3 className="text-3xl font-black text-white mb-8 uppercase tracking-tight">เวลานี้ยังว่างอยู่</h3>
+                        <h3 className="text-3xl font-black text-white mb-8 uppercase tracking-tight">
+                          เวลานี้ยังว่างอยู่
+                        </h3>
 
                         {/* <button
                           onClick={() => {
@@ -871,13 +1028,14 @@ export default function Bookings() {
               ) : (
                 <div className="bg-zinc-900/10 border border-white/5 rounded-[3rem] p-20 text-center h-full flex flex-col items-center justify-center">
                   <AlertCircle size={48} className="text-zinc-700 mb-4" />
-                  <p className="text-zinc-500 font-bold text-xl uppercase tracking-widest">โปรดเลือกช่วงเวลาจากด้านซ้าย</p>
+                  <p className="text-zinc-500 font-bold text-xl uppercase tracking-widest">
+                    โปรดเลือกช่วงเวลาจากด้านซ้าย
+                  </p>
                 </div>
               )}
             </div>
           )}
         </div>
-
       </div>
 
       {/* --- Reschedule Modal (Admin) --- */}
@@ -886,7 +1044,8 @@ export default function Bookings() {
           <div className="bg-zinc-900 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out]">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-2xl font-serif font-bold text-white flex items-center gap-3">
-                <CalendarClock className="text-blue-400" size={24} /> เลื่อนคิวลูกค้า
+                <CalendarClock className="text-blue-400" size={24} />{" "}
+                เลื่อนคิวลูกค้า
               </h3>
               <button
                 onClick={() => setShowRescheduleModal(false)}
@@ -903,10 +1062,15 @@ export default function Bookings() {
                   <Scissors size={24} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-0.5">คิวปัจจุบัน</p>
-                  <h4 className="text-white font-bold truncate">{rescheduleData.serviceName}</h4>
+                  <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-0.5">
+                    คิวปัจจุบัน
+                  </p>
+                  <h4 className="text-white font-bold truncate">
+                    {rescheduleData.serviceName}
+                  </h4>
                   <p className="text-zinc-400 text-xs font-num">
-                    {rescheduleData.currentDate} • {rescheduleData.currentTime} น.
+                    {rescheduleData.currentDate} • {rescheduleData.currentTime}{" "}
+                    น.
                   </p>
                 </div>
               </div>
@@ -918,13 +1082,21 @@ export default function Bookings() {
                 </label>
                 <input
                   type="date"
-                  min={new Date().toISOString().split('T')[0]}
+                  min={new Date().toISOString().split("T")[0]}
                   max={rescheduleData.maxDate}
                   value={rescheduleData.date}
-                  onChange={(e) => setRescheduleData({ ...rescheduleData, date: e.target.value, time: '' })}
+                  onChange={(e) =>
+                    setRescheduleData({
+                      ...rescheduleData,
+                      date: e.target.value,
+                      time: "",
+                    })
+                  }
                   className="w-full bg-zinc-950 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-blue-500 outline-none transition-all font-num scheme-dark"
                 />
-                <p className="text-[10px] text-zinc-500 mt-1.5">* แอดมินสามารถเลื่อนล่วงหน้าได้ไม่เกิน 30 วัน</p>
+                <p className="text-[10px] text-zinc-500 mt-1.5">
+                  * แอดมินสามารถเลื่อนล่วงหน้าได้ไม่เกิน 30 วัน
+                </p>
               </div>
 
               {/* Time Selection */}
@@ -934,11 +1106,16 @@ export default function Bookings() {
                     <Clock size={16} /> เลือกเวลาใหม่
                   </label>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-62.5 overflow-y-auto pr-2 scrollbar-hide">
-                    {timeSlots.map(slot => {
-                      const isBooked = rescheduleBookedSlots.some(bTime => bTime && bTime.startsWith(slot));
-                      const isBusy = rescheduleAdminBusySlots.some(busy => {
+                    {timeSlots.map((slot) => {
+                      const isBooked = rescheduleBookedSlots.some(
+                        (bTime) => bTime && bTime.startsWith(slot),
+                      );
+                      const isBusy = rescheduleAdminBusySlots.some((busy) => {
                         if (busy.is_full_day) return true;
-                        return slot >= busy.start_time.slice(0, 5) && slot <= busy.end_time.slice(0, 5);
+                        return (
+                          slot >= busy.start_time.slice(0, 5) &&
+                          slot <= busy.end_time.slice(0, 5)
+                        );
                       });
                       const isDisabled = isBooked || isBusy;
 
@@ -946,22 +1123,28 @@ export default function Bookings() {
                         <button
                           key={slot}
                           disabled={isDisabled}
-                          onClick={() => setRescheduleData({ ...rescheduleData, time: slot })}
-                          className={`py-2.5 rounded-xl text-sm font-num font-bold transition-all border ${rescheduleData.time === slot
-                            ? 'bg-blue-500 text-black border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.35)] scale-105 z-10'
-                            : isBusy
-                              ? 'bg-red-500/10 text-red-500 border-red-500/20 cursor-not-allowed opacity-40'
-                              : isBooked
-                                ? 'bg-amber-500/10 text-amber-500/50 border-amber-500/20 cursor-not-allowed opacity-40'
-                                : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-blue-500/50 hover:text-white'
-                            }`}
+                          onClick={() =>
+                            setRescheduleData({ ...rescheduleData, time: slot })
+                          }
+                          className={`py-2.5 rounded-xl text-sm font-num font-bold transition-all border ${
+                            rescheduleData.time === slot
+                              ? "bg-blue-500 text-black border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.35)] scale-105 z-10"
+                              : isBusy
+                                ? "bg-red-500/10 text-red-500 border-red-500/20 cursor-not-allowed opacity-40"
+                                : isBooked
+                                  ? "bg-amber-500/10 text-amber-500/50 border-amber-500/20 cursor-not-allowed opacity-40"
+                                  : "bg-zinc-800 text-zinc-300 border-white/5 hover:border-blue-500/50 hover:text-white"
+                          }`}
                         >
-                          {isBusy ? 'ไม่ว่าง' : slot}
+                          {isBusy ? "ไม่ว่าง" : slot}
                         </button>
                       );
                     })}
                   </div>
-                  <p className="text-[10px] text-zinc-500 mt-3">* ระบบจะปิดช่วงเวลาที่มีการจองหรือแอดมินประกาศไม่ว่างแล้วอัตโนมัติ</p>
+                  <p className="text-[10px] text-zinc-500 mt-3">
+                    *
+                    ระบบจะปิดช่วงเวลาที่มีการจองหรือแอดมินประกาศไม่ว่างแล้วอัตโนมัติ
+                  </p>
                 </div>
               )}
 
@@ -993,104 +1176,96 @@ export default function Bookings() {
       {/* --- Walk-in Modal --- */}
       {showWalkInModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-white/10 shadow-2xl p-6 animate-[slideUp_0.3s_ease-out]">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <Plus size={20} className="text-amber-500" /> เพิ่มคิว Walk-in
+          {/* ปรับ max-w-md เป็น max-w-2xl และเพิ่ม padding เป็น p-8 */}
+          <div className="bg-zinc-900 w-full max-w-2xl rounded-2xl border border-white/10 shadow-2xl p-8 animate-[slideUp_0.3s_ease-out]">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+                <div className="p-2 bg-amber-500/10 rounded-lg">
+                  <Plus size={24} className="text-amber-500" />
+                </div>
+                เพิ่มคิว Walk-in
               </h3>
-              <button onClick={() => setShowWalkInModal(false)} className="text-zinc-500 hover:text-white transition-colors">
-                <X size={24} />
+              <button
+                onClick={() => setShowWalkInModal(false)}
+                className="text-zinc-500 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full"
+              >
+                <X size={28} />
               </button>
             </div>
 
-            <form onSubmit={handleWalkInSubmit} className="space-y-4">
-              <div>
-                <label className="text-sm text-zinc-400 mb-1 block">ชื่อลูกค้า</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="ระบุชื่อลูกค้า..."
-                  value={walkInForm.customer}
-                  onChange={e => setWalkInForm({ ...walkInForm, customer: e.target.value })}
-                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-zinc-400 mb-1 block">บริการ</label>
-                <select
-                  required
-                  value={walkInForm.service}
-                  onChange={e => {
-                    const selectedService = services.find(s => s.name === e.target.value);
-                    setWalkInForm({
-                      ...walkInForm,
-                      service: e.target.value,
-                      price: selectedService?.price || walkInForm.price
-                    });
-                  }}
-                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none"
-                >
-                  <option value="">-- เลือกบริการ --</option>
-                  {services.map((service) => (
-                    <option key={service.id} value={service.name}>
-                      {service.name} - ฿{service.price}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleWalkInSubmit} className="space-y-6">
+              {/* Row 1: Date & Price (จัดให้อยู่แถวเดียวกันเพื่อความสวยงามในจอใหญ่) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <label className="text-sm text-zinc-400 mb-1 block">วันที่</label>
+                  <label className="text-xl text-zinc-400 mb-2 block">
+                    วันที่
+                  </label>
                   <input
                     type="date"
                     required
                     value={walkInForm.date}
-                    onChange={e => setWalkInForm({ ...walkInForm, date: e.target.value })}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none"
+                    onChange={(e) =>
+                      setWalkInForm({ ...walkInForm, date: e.target.value })
+                    }
+                    className="w-full bg-zinc-950 border border-white/10 rounded-xl px-5 py-3 text-lg text-white focus:border-amber-500 outline-none"
                   />
                 </div>
-                <div className="col-span-2">
-                  <label className="text-sm text-zinc-400 mb-3 block">เลือกเวลา</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {timeSlots.map(slot => (
-                      <button
-                        key={slot}
-                        type="button"
-                        onClick={() => setWalkInForm({ ...walkInForm, time: slot })}
-                        className={`py-2 rounded-lg text-xs font-num font-bold border transition-all ${walkInForm.time === slot
-                          ? 'bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/20'
-                          : 'bg-zinc-950 text-zinc-400 border-white/5 hover:border-amber-500/50'
-                          }`}
-                      >
-                        {slot}
-                      </button>
-                    ))}
-                  </div>
+                <div>
+                  <label className="text-xl text-zinc-400 mb-2 block">
+                    ราคา (บาท)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="0.00"
+                    value={walkInForm.price}
+                    onChange={(e) =>
+                      setWalkInForm({ ...walkInForm, price: e.target.value })
+                    }
+                    className="w-full bg-zinc-950 border border-white/10 rounded-xl px-5 py-3 text-lg text-white focus:border-amber-500 outline-none font-num"
+                  />
                 </div>
               </div>
+
+              {/* Row 2: Time Slots */}
               <div>
-                <label className="text-sm text-zinc-400 mb-1 block">ราคา (บาท)</label>
-                <input
-                  type="number"
-                  required
-                  placeholder="0.00"
-                  value={walkInForm.price}
-                  onChange={e => setWalkInForm({ ...walkInForm, price: e.target.value })}
-                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none font-num"
-                />
+                <label className="text-xl text-zinc-400 mb-3 block">
+                  เลือกเวลา
+                </label>
+                {/* ปรับ Grid ให้ปุ่มดูใหญ่ขึ้น */}
+                <div className="grid grid-cols-4 gap-3">
+                  {timeSlots.map((slot) => (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() =>
+                        setWalkInForm({ ...walkInForm, time: slot })
+                      }
+                      className={`py-3 px-2 rounded-xl text-2xl font-num font-bold border transition-all ${
+                        walkInForm.time === slot
+                          ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/20 scale-105"
+                          : "bg-zinc-950 text-zinc-400 border-white/5 hover:border-amber-500/50 hover:text-zinc-200"
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              <div className="pt-4 flex gap-3">
+              {/* Action Buttons */}
+              <div className="pt-6 flex gap-4">
                 <button
                   type="button"
                   onClick={() => setShowWalkInModal(false)}
-                  className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold transition-colors"
+                  className="flex-1 py-3.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold text-lg transition-colors"
                 >
                   ยกเลิก
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl font-bold transition-colors shadow-lg shadow-amber-500/20"
+                  className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-400 text-black rounded-xl font-bold text-lg transition-colors shadow-lg shadow-amber-500/20"
                 >
                   ยืนยันการจอง
                 </button>
@@ -1101,212 +1276,275 @@ export default function Bookings() {
       )}
 
       {/* --- Busy/Closure Modal --- */}
-      {
-        showBusyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-white/10 shadow-2xl p-6 animate-[slideUp_0.3s_ease-out]">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                  <Clock size={20} className="text-red-500" /> ประกาศไม่ว่าง/ปิดร้าน
-                </h3>
-                <button onClick={() => setShowBusyModal(false)} className="text-zinc-500 hover:text-white transition-colors">
-                  <X size={24} />
+      {showBusyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-white/10 shadow-2xl p-6 animate-[slideUp_0.3s_ease-out]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                <Clock size={20} className="text-red-500" />{" "}
+                ประกาศไม่ว่าง/ปิดร้าน
+              </h3>
+              <button
+                onClick={() => setShowBusyModal(false)}
+                className="text-zinc-500 hover:text-white transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleBusySubmit} className="space-y-6">
+              <div className="bg-red-500/5 border border-red-500/10 p-4 rounded-xl">
+                <p className="text-red-400 text-xs leading-relaxed flex items-start gap-2">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  การแจ้งไม่ว่างจะทำการยกเลิกคิว (Pending)
+                  ทั้งหมดในช่วงเวลาที่เลือก และส่งข้อความ LINE
+                  แจ้งลูกค้าโดยอัตโนมัติ
+                </p>
+              </div>
+
+              <div className="flex p-1 bg-zinc-950 rounded-xl border border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setBusyForm({ ...busyForm, mode: "range" })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === "range" ? "bg-zinc-800 text-white border border-white/10 shadow-sm" : "text-zinc-500 hover:text-zinc-400"}`}
+                >
+                  ระบุช่วงเวลา
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBusyForm({ ...busyForm, mode: "full" })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === "full" ? "bg-zinc-800 text-white border border-white/10 shadow-sm" : "text-zinc-500 hover:text-zinc-400"}`}
+                >
+                  หยุดร้าน
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBusyForm({ ...busyForm, mode: "multi" })}
+                  className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === "multi" ? "bg-zinc-800 text-white border border-white/10 shadow-sm" : "text-zinc-500 hover:text-zinc-400"}`}
+                >
+                  หยุดหลายวัน
                 </button>
               </div>
 
-              <form onSubmit={handleBusySubmit} className="space-y-6">
-                <div className="bg-red-500/5 border border-red-500/10 p-4 rounded-xl">
-                  <p className="text-red-400 text-xs leading-relaxed flex items-start gap-2">
-                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                    การแจ้งไม่ว่างจะทำการยกเลิกคิว (Pending) ทั้งหมดในช่วงเวลาที่เลือก และส่งข้อความ LINE แจ้งลูกค้าโดยอัตโนมัติ
-                  </p>
-                </div>
-
-                <div className="flex p-1 bg-zinc-950 rounded-xl border border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => setBusyForm({ ...busyForm, mode: 'range' })}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === 'range' ? 'bg-zinc-800 text-white border border-white/10 shadow-sm' : 'text-zinc-500 hover:text-zinc-400'}`}
-                  >
-                    ระบุช่วงเวลา
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBusyForm({ ...busyForm, mode: 'full' })}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === 'full' ? 'bg-zinc-800 text-white border border-white/10 shadow-sm' : 'text-zinc-500 hover:text-zinc-400'}`}
-                  >
-                    หยุดร้าน
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBusyForm({ ...busyForm, mode: 'multi' })}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === 'multi' ? 'bg-zinc-800 text-white border border-white/10 shadow-sm' : 'text-zinc-500 hover:text-zinc-400'}`}
-                  >
-                    หยุดหลายวัน
-                  </button>
-                </div>
-
-                {busyForm.mode === 'multi' ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm text-zinc-400 mb-2 block">เริ่มหยุดวันที่</label>
-                      <input
-                        type="date"
-                        value={busyForm.date}
-                        min={new Date().toISOString().split('T')[0]}
-                        max={maxClosureDate}
-                        onChange={e => setBusyForm({ ...busyForm, date: e.target.value })}
-                        className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm text-zinc-400 mb-2 block">หยุดถึงวันที่</label>
-                      <input
-                        type="date"
-                        value={busyForm.endDate}
-                        min={busyForm.date}
-                        max={maxClosureDate}
-                        onChange={e => setBusyForm({ ...busyForm, endDate: e.target.value })}
-                        className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
-                      />
-                    </div>
-                  </div>
-                ) : (
+              {busyForm.mode === "multi" ? (
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm text-zinc-400 mb-2 block">วันที่ดำเนินการ</label>
+                    <label className="text-sm text-zinc-400 mb-2 block">
+                      เริ่มหยุดวันที่
+                    </label>
                     <input
                       type="date"
                       value={busyForm.date}
-                      min={new Date().toISOString().split('T')[0]}
+                      min={new Date().toISOString().split("T")[0]}
                       max={maxClosureDate}
-                      onChange={e => setBusyForm({ ...busyForm, date: e.target.value })}
+                      onChange={(e) =>
+                        setBusyForm({ ...busyForm, date: e.target.value })
+                      }
                       className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
                     />
                   </div>
-                )}
-
-                {busyForm.mode === 'range' && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm text-zinc-400 mb-2 block">เวลาเริ่มต้น</label>
-                      <select
-                        value={busyForm.startTime}
-                        onChange={e => setBusyForm({ ...busyForm, startTime: e.target.value })}
-                        className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-red-500/50 outline-none font-num"
-                      >
-                        {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-sm text-zinc-400 mb-2 block">เวลาสิ้นสุด</label>
-                      <select
-                        value={busyForm.endTime}
-                        onChange={e => setBusyForm({ ...busyForm, endTime: e.target.value })}
-                        className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-red-500/50 outline-none font-num"
-                      >
-                        {timeSlots.map(slot => <option key={slot} value={slot}>{slot}</option>)}
-                      </select>
-                    </div>
+                  <div>
+                    <label className="text-sm text-zinc-400 mb-2 block">
+                      หยุดถึงวันที่
+                    </label>
+                    <input
+                      type="date"
+                      value={busyForm.endDate}
+                      min={busyForm.date}
+                      max={maxClosureDate}
+                      onChange={(e) =>
+                        setBusyForm({ ...busyForm, endDate: e.target.value })
+                      }
+                      className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
+                    />
                   </div>
-                )}
-
-                <div className="pt-4 flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowBusyModal(false)}
-                    className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold transition-colors"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isProcessingBusy}
-                    className="flex-2 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
-                  >
-                    {isProcessingBusy ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
-                        กำลังดำเนินการ...
-                      </>
-                    ) : (
-                      'ยืนยันประกาศไม่ว่าง'
-                    )}
-                  </button>
                 </div>
-              </form>
-            </div>
+              ) : (
+                <div>
+                  <label className="text-sm text-zinc-400 mb-2 block">
+                    วันที่ดำเนินการ
+                  </label>
+                  <input
+                    type="date"
+                    value={busyForm.date}
+                    min={new Date().toISOString().split("T")[0]}
+                    max={maxClosureDate}
+                    onChange={(e) =>
+                      setBusyForm({ ...busyForm, date: e.target.value })
+                    }
+                    className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
+                  />
+                </div>
+              )}
+
+              {busyForm.mode === "range" && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm text-zinc-400 mb-2 block">
+                      เวลาเริ่มต้น
+                    </label>
+                    <select
+                      value={busyForm.startTime}
+                      onChange={(e) =>
+                        setBusyForm({ ...busyForm, startTime: e.target.value })
+                      }
+                      className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-red-500/50 outline-none font-num"
+                    >
+                      {timeSlots.map((slot) => (
+                        <option key={slot} value={slot}>
+                          {slot}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-sm text-zinc-400 mb-2 block">
+                      เวลาสิ้นสุด
+                    </label>
+                    <select
+                      value={busyForm.endTime}
+                      onChange={(e) =>
+                        setBusyForm({ ...busyForm, endTime: e.target.value })
+                      }
+                      className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-red-500/50 outline-none font-num"
+                    >
+                      {timeSlots.map((slot) => (
+                        <option key={slot} value={slot}>
+                          {slot}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowBusyModal(false)}
+                  className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold transition-colors"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isProcessingBusy}
+                  className="flex-2 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
+                >
+                  {isProcessingBusy ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
+                      กำลังดำเนินการ...
+                    </>
+                  ) : (
+                    "ยืนยันประกาศไม่ว่าง"
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
-        )
-      }
+        </div>
+      )}
 
       {/* --- Custom Confirmation Modal (Card Style) --- */}
-      {
-        showConfirmModal && (
-          <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
-            <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out]">
-              <div className={`h-2 w-full ${confirmConfig.type === 'danger' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
-              <div className="p-8 text-center">
-                <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${confirmConfig.type === 'danger' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'
-                  }`}>
-                  {confirmConfig.type === 'danger' ? <AlertCircle size={32} /> : <CheckCircle size={32} />}
-                </div>
-                <h3 className="text-xl font-bold text-white mb-2">{confirmConfig.title}</h3>
-                <p className="text-zinc-400 text-sm leading-relaxed mb-8">{confirmConfig.message}</p>
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl overflow-hidden animate-[slideUp_0.3s_ease-out]">
+            <div
+              className={`h-2 w-full ${confirmConfig.type === "danger" ? "bg-red-500" : "bg-amber-500"}`}
+            ></div>
+            <div className="p-8 text-center">
+              <div
+                className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${
+                  confirmConfig.type === "danger"
+                    ? "bg-red-500/10 text-red-500"
+                    : "bg-amber-500/10 text-amber-500"
+                }`}
+              >
+                {confirmConfig.type === "danger" ? (
+                  <AlertCircle size={32} />
+                ) : (
+                  <CheckCircle size={32} />
+                )}
+              </div>
+              <h3 className="text-xl font-bold text-white mb-2">
+                {confirmConfig.title}
+              </h3>
+              <p className="text-zinc-400 text-sm leading-relaxed mb-8">
+                {confirmConfig.message}
+              </p>
 
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowConfirmModal(false)}
-                    className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all active:scale-95"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    onClick={confirmConfig.onConfirm}
-                    className={`flex-1 py-3 rounded-xl font-bold text-white transition-all active:scale-95 shadow-lg ${confirmConfig.type === 'danger' ? 'bg-red-600 hover:bg-red-500 shadow-red-600/20' : 'bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20'
-                      }`}
-                  >
-                    ยืนยัน
-                  </button>
-                </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl font-bold transition-all active:scale-95"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  onClick={confirmConfig.onConfirm}
+                  className={`flex-1 py-3 rounded-xl font-bold text-white transition-all active:scale-95 shadow-lg ${
+                    confirmConfig.type === "danger"
+                      ? "bg-red-600 hover:bg-red-500 shadow-red-600/20"
+                      : "bg-amber-500 hover:bg-amber-400 text-black shadow-amber-500/20"
+                  }`}
+                >
+                  ยืนยัน
+                </button>
               </div>
             </div>
           </div>
-        )
-      }
+        </div>
+      )}
 
       {/* --- NOTIFICATION MODAL --- */}
-      {
-        notification.show && (
-          <div className="fixed inset-0 z-100 flex items-center justify-center p-6 sm:p-4">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]" onClick={() => setNotification({ ...notification, show: false })}></div>
-            <div className="bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl border border-white/10 p-8 text-center relative z-10 animate-[slideUp_0.3s_ease-out]">
-              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${notification.type === 'error' ? 'bg-red-500/20 text-red-500' :
-                notification.type === 'warning' ? 'bg-amber-500/20 text-amber-500' :
-                  'bg-green-500/20 text-green-500'
-                }`}>
-                {notification.type === 'error' ? <XCircle className="w-8 h-8" /> :
-                  notification.type === 'warning' ? <AlertCircle className="w-8 h-8" /> :
-                    <CheckCircle className="w-8 h-8" />}
-              </div>
-              <h4 className="text-xl font-bold text-white mb-2">
-                {notification.type === 'error' ? 'เกิดข้อผิดพลาด' :
-                  notification.type === 'warning' ? 'แจ้งเตือน' :
-                    'สำเร็จ'}
-              </h4>
-              <p className="text-zinc-400 text-sm leading-relaxed mb-8 whitespace-pre-wrap">{notification.message}</p>
-              <button
-                onClick={() => setNotification({ ...notification, show: false })}
-                className={`w-full py-3 rounded-xl font-bold transition-all shadow-lg ${notification.type === 'error' ? 'bg-red-500 text-white hover:bg-red-400 shadow-red-500/20' :
-                  'bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20'
-                  }`}
-              >
-                ตกลง
-              </button>
+      {notification.show && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center p-6 sm:p-4">
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-[fadeIn_0.2s_ease-out]"
+            onClick={() => setNotification({ ...notification, show: false })}
+          ></div>
+          <div className="bg-zinc-900 w-full max-w-sm rounded-3xl shadow-2xl border border-white/10 p-8 text-center relative z-10 animate-[slideUp_0.3s_ease-out]">
+            <div
+              className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${
+                notification.type === "error"
+                  ? "bg-red-500/20 text-red-500"
+                  : notification.type === "warning"
+                    ? "bg-amber-500/20 text-amber-500"
+                    : "bg-green-500/20 text-green-500"
+              }`}
+            >
+              {notification.type === "error" ? (
+                <XCircle className="w-8 h-8" />
+              ) : notification.type === "warning" ? (
+                <AlertCircle className="w-8 h-8" />
+              ) : (
+                <CheckCircle className="w-8 h-8" />
+              )}
             </div>
+            <h4 className="text-xl font-bold text-white mb-2">
+              {notification.type === "error"
+                ? "เกิดข้อผิดพลาด"
+                : notification.type === "warning"
+                  ? "แจ้งเตือน"
+                  : "สำเร็จ"}
+            </h4>
+            <p className="text-zinc-400 text-sm leading-relaxed mb-8 whitespace-pre-wrap">
+              {notification.message}
+            </p>
+            <button
+              onClick={() => setNotification({ ...notification, show: false })}
+              className={`w-full py-3 rounded-xl font-bold transition-all shadow-lg ${
+                notification.type === "error"
+                  ? "bg-red-500 text-white hover:bg-red-400 shadow-red-500/20"
+                  : "bg-amber-500 text-black hover:bg-amber-400 shadow-amber-500/20"
+              }`}
+            >
+              ตกลง
+            </button>
           </div>
-        )
-      }
-
-    </div >
+        </div>
+      )}
+    </div>
   );
 }
