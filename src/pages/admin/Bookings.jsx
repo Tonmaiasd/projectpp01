@@ -233,7 +233,8 @@ export default function Bookings() {
     // map ฟิลด์จาก DB ให้ตรงกับที่ UI ใช้
     const mapped = data.map((b) => ({
       id: b.id,
-      customer: b.customer_name || profilesMap[b.user_id]?.full_name || (b.user_id ? String(b.user_id).slice(0, 8) + '…' : '-'),
+      // ดึงชื่อจาก profiles table เป็นหลัก (ชื่อล่าสุด) ถ้าไม่มีค่อยใช้ customer_name ที่บันทึกไว้
+      customer: profilesMap[b.user_id]?.full_name || b.customer_name || (b.user_id ? String(b.user_id).slice(0, 8) + '…' : '-'),
       service: b.service_name,
       date: b.booking_date,
       time: b.booking_time,
