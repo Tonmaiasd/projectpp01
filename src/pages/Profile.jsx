@@ -722,11 +722,11 @@ export default function Profile() {
 
         {/* --- Link LINE Notice --- */}
         {showLinkNotice && !profileLineId && (
-          <div className="mb-8 p-4 bg-green-500/10 border border-green-500/20 rounded-2xl flex items-start gap-4">
-            <AlertCircle className="text-green-500 shrink-0 mt-1" size={20} />
+          <div className="mb-8 p-4 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-start gap-4 animate-pulse">
+            <AlertCircle className="text-amber-500 shrink-0 mt-1" size={20} />
             <div>
-              <h4 className="font-bold text-green-500 mb-1">เชื่อมต่อ LINE สำเร็จแล้ว!</h4>
-              <p className="text-xs text-green-400/80">บัญชี LINE ของคุณเชื่อมต่อเรียบร้อยแล้ว คุณจะได้รับการแจ้งเตือนคิวผ่าน LINE</p>
+              <h4 className="font-bold text-amber-500 mb-1">กรุณาเชื่อมบัญชี LINE เพื่อจองคิว</h4>
+              <p className="text-xs text-amber-400/80">ระบบต้องการการเชื่อมต่อกับ LINE ของคุณเพื่อส่งข้อความแจ้งเตือนคิว กรุณากดปุ่ม "เชื่อมต่อบัญชี LINE" ด้านล่างก่อนเริ่มการจองครับ</p>
             </div>
           </div>
         )}

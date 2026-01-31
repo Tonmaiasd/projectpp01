@@ -29,7 +29,7 @@ export default function Booking() {
   const [error, setError] = useState(null);
 
   // State สำหรับการจอง (Booking Modal)
-  const [bookingStep, setBookingStep] = useState('select'); // 'select' | 'confirm' | 'success'
+  const [bookingStep, setBookingStep] = useState('select'); // 'line_qr' | 'select' | 'confirm' | 'success'
   const [bookingInProgress, setBookingInProgress] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [bookingData, setBookingData] = useState({
@@ -42,6 +42,7 @@ export default function Booking() {
   const [bookedSlots, setBookedSlots] = useState([]);
   const [adminBusySlots, setAdminBusySlots] = useState([]);
   const [servicesPage, setServicesPage] = useState(1); // Pagination for services
+  const [skipLineStep, setSkipLineStep] = useState(false); // Toggle to skip LINE QR step
 
   // Fetch booked slots for the selected date
   const fetchBookedAndBusySlots = async () => {
@@ -305,13 +306,21 @@ export default function Booking() {
     });
 
     setSelectedPackage(pkg);
-    setBookingStep('select');
+    // ตามคำขอ: ถ้า skipLineStep เป็น true ให้ข้ามไปเลือกเวลาเลย
+    // ถ้าเป็น false ให้แสดงหน้าเพิ่มเพื่อนเสมอ (เพื่อให้ user เห็นหน้า QR ตามต้องการ)
+    if (skipLineStep) {
+      setBookingStep('select');
+    } else {
+      setBookingStep('line_qr');
+    }
   };
 
   // ปิด Modal ทั้งหมด
   const closeAll = () => {
     setSelectedPackage(null);
     setSelectedPromotion(null);
+    // ไม่รีเซ็ต skipLineStep เพื่อให้ค่าที่ user เลือกยังคงอยู่
+    // เมื่อเปิดใหม่ครั้งหน้า จะเช็คค่านี้ใน handleOpenBooking เอง
     setBookingStep('select');
     setBookingData({ date: '', time: '', name: '', tel: '' });
     setCreatedBooking(null);
@@ -431,7 +440,7 @@ export default function Booking() {
 
       if (error) throw error;
 
-      // 2) เก็บข้อมูลคิวที่สร้างแล้ว เพื่อใช้ส่งแจ้งเตือนเมื่อผู้ใช้กด "จองเสร็จสิ้น"
+      // 2) เก็บข้อมูลคิวที่สร้างแล้ว เพื่อใช้แสดงในหน้า Success (ถ้าจำเป็น)
       setCreatedBooking({
         id: data.id,
         customer_name: bookingData.name || userProfile?.full_name || user.user_metadata?.name || '',
@@ -442,6 +451,23 @@ export default function Booking() {
         status: data.status,
       });
 
+      // 3) ส่งแจ้งเตือนไปยัง LINE ทันที
+      fetch('http://localhost:3001/api/line/notify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          booking_id: data.id,
+          customer_name: data.customer_name,
+          service_name: data.service_name,
+          booking_date: data.booking_date,
+          booking_time: data.booking_time,
+          price: data.price,
+          status: data.status,
+        }),
+      }).catch(err => console.warn('LINE Notify background error:', err));
+
       setBookingStep('success');
     } catch (error) {
       showNotification('Error creating booking: ' + error.message, "error");
@@ -451,26 +477,8 @@ export default function Booking() {
     }
   };
 
-  // เมื่อผู้ใช้กด "จองเสร็จสิ้น" ค่อยส่งแจ้งเตือนไปยัง LINE ว่ายืนยันการจองแล้ว
+  // เมื่อผู้ใช้กด "จองเสร็จสิ้น" ปิด Modal (แจ้งเตือนถูกส่งไปแล้วตอนกด ยืนยันการจอง)
   const handleFinishBooking = () => {
-    if (createdBooking) {
-      fetch('http://localhost:3001/api/line/notify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          booking_id: createdBooking.id,
-          customer_name: createdBooking.customer_name,
-          service_name: createdBooking.service_name,
-          booking_date: createdBooking.booking_date,
-          booking_time: createdBooking.booking_time,
-          price: createdBooking.price,
-          status: createdBooking.status,
-        }),
-      }).catch(err => console.warn('LINE Notify background error:', err));
-    }
-
     closeAll();
   };
 
@@ -693,18 +701,69 @@ export default function Booking() {
                   {bookingStep === 'success' ? 'จองคิวสำเร็จ' : selectedPackage.name}
                 </h3>
               </div>
-              {bookingStep !== 'success' && (
-                <button
-                  onClick={closeAll}
-                  className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {bookingStep !== 'success' && (
+                  <div className="flex items-center gap-2 mr-2">
+                    <span className="text-[10px] text-zinc-500 font-bold uppercase hidden sm:inline">ข้ามหน้า QR</span>
+                    <button
+                      onClick={() => {
+                        const nextVal = !skipLineStep;
+                        setSkipLineStep(nextVal);
+                        // เปลี่ยนหน้าทันทีตามค่า Toggle
+                        if (nextVal) {
+                          setBookingStep('select');
+                        } else {
+                          setBookingStep('line_qr');
+                        }
+                      }}
+                      className={`w-10 h-5 rounded-full relative transition-all duration-300 ${skipLineStep ? 'bg-amber-500' : 'bg-zinc-700'}`}
+                      title="เปิด/ปิด การแสดงหน้าสแกน QR Code"
+                    >
+                      <div className={`absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform duration-300 ${skipLineStep ? 'translate-x-5' : ''}`}></div>
+                    </button>
+                  </div>
+                )}
+                {bookingStep !== 'success' && (
+                  <button
+                    onClick={closeAll}
+                    className="p-2 bg-zinc-800 rounded-full hover:bg-zinc-700 transition-colors text-white"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Modal Body */}
             <div className="overflow-y-auto p-0 bg-zinc-950">
+
+              {/* STEP 0: Scan LINE QR Code */}
+              {bookingStep === 'line_qr' && (
+                <div className="p-8 text-center bg-zinc-950 min-h-[400px] flex flex-col items-center justify-center animate-[fadeIn_0.5s_ease-out]">
+                  <div className="w-20 h-20 bg-amber-500/20 rounded-full flex items-center justify-center mb-6 shadow-lg shadow-amber-500/10">
+                    <MessageCircle className="w-10 h-10 text-amber-500" />
+                  </div>
+                  <h4 className="text-3xl font-serif font-bold text-white mb-3 tracking-tight">เพิ่มเพื่อนก่อนจอง</h4>
+                  <p className="text-zinc-400 text-sm max-w-xs mx-auto mb-8 leading-relaxed">
+                    กรุณาสแกน QR Code เพื่อเพิ่มเพื่อนใน LINE รับการแจ้งเตือนสถานะคิวและการจองของคุณ
+                  </p>
+
+                  <div className="relative group">
+                    <div className="absolute -inset-4 bg-linear-to-tr from-amber-500 to-amber-200 rounded-4xl opacity-20 blur-xl group-hover:opacity-40 transition-opacity"></div>
+                    <div className="relative bg-white p-4 rounded-3xl shadow-2xl border-4 border-amber-500/20">
+                      <img
+                        src="/line-oa-qr.png"
+                        alt="LINE OA QR Code"
+                        className="w-48 h-48 object-contain"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="mt-8 text-amber-500 font-bold flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" /> เพิ่มเพื่อนแล้วกดปุ่ม "ไปต่อเพื่อเลือกเวลา"
+                  </p>
+                </div>
+              )}
 
               {/* STEP 1: Select Date & Info */}
               {bookingStep === 'select' && (
@@ -885,28 +944,35 @@ export default function Booking() {
                   </div>
                   <h4 className="text-3xl font-serif font-bold text-white mb-3 tracking-tight">จองคิวสำเร็จ!</h4>
                   <p className="text-zinc-400 text-sm max-w-xs mx-auto mb-8 leading-relaxed">
-                    ขอบคุณที่ใช้บริการครับ เมื่อกดปุ่ม "จองเสร็จสิ้น" ระบบจะส่งข้อความยืนยันการจองไปยัง LINE ของคุณครับ
+                    ขอบคุณที่ใช้บริการครับ เมื่อถึงคิวของท่านระบบจะแจ้งเตือนผ่าน LINE
                   </p>
 
-                  <div className="relative group">
+                  {/* <div className="relative group">
                     <div className="absolute -inset-4 bg-linear-to-tr from-amber-500 to-amber-200 rounded-4xl opacity-20 blur-xl group-hover:opacity-40 transition-opacity"></div>
                     <div className="relative bg-white p-4 rounded-3xl shadow-2xl border-4 border-amber-500/20">
-                      <img
-                        src="/line-oa-qr.png"
-                        alt="LINE OA QR Code"
-                        className="w-48 h-48 object-contain"
-                      />
                     </div>
                   </div>
 
                   <p className="mt-8 text-amber-500 font-bold flex items-center gap-2 animate-bounce">
                     <Sparkles className="w-4 h-4" /> สแกนเพื่อเพิ่มเพื่อนรับการแจ้งเตือน
-                  </p>
+                  </p> */}
                 </div>
               )}
             </div>
 
             {/* Modal Footer (Action Buttons) */}
+            {
+              bookingStep === 'line_qr' && (
+                <div className="p-6 border-t border-white/10 bg-zinc-900">
+                  <button
+                    onClick={() => setBookingStep('select')}
+                    className="w-full bg-amber-500 text-black py-4 rounded-xl font-bold hover:bg-amber-400 transition-all shadow-lg shadow-amber-500/20 text-lg flex items-center justify-center gap-2"
+                  >
+                    ไปต่อเพื่อเลือกเวลา <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              )
+            }
             {
               bookingStep === 'select' && (
                 <div className="p-6 border-t border-white/10 bg-zinc-900">
