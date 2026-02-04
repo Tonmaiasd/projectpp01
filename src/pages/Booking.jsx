@@ -796,9 +796,11 @@ export default function Booking() {
                       <input
                         type="date"
                         value={bookingData.date}
-                        min={new Date().toISOString().split('T')[0]}
+                        min={new Date(new Date().getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                         max={bookingData.maxDate}
-                        onChange={(e) => setBookingData({ ...bookingData, date: e.target.value })}
+                        onChange={(e) => {
+                          setBookingData({ ...bookingData, date: e.target.value });
+                        }}
                         className="w-full bg-zinc-800 border border-white/10 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 outline-none text-white scheme-dark font-num"
                       />
                     </div>

@@ -989,12 +989,13 @@ const runOverdueBookingCleanup = async () => {
     const nowLocal = new Date(new Date().getTime() + (7 * 60 * 60 * 1000));
     const todayStr = nowLocal.toISOString().split('T')[0];
 
-    // Find Pending/Confirmed bookings from PREVIOUS days (booking_date < today)
+    // Find Pending bookings from PREVIOUS days (booking_date < today)
+    // Only notify Pending bookings, not Confirmed or other statuses
     const { data: bookings, error } = await supabaseAdmin
       .from('bookings')
       .select('*')
       .lt('booking_date', todayStr)
-      .in('status', ['Pending', 'Confirmed']);
+      .eq('status', 'Pending');
 
     if (error || !bookings) return;
 

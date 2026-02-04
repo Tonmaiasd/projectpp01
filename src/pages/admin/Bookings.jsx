@@ -28,7 +28,7 @@ export default function Bookings() {
   const { user } = useContext(AuthContext);
   const navigate = useNavigate(); // 2. เรียกใช้ Hook
   const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split("T")[0],
+    new Date().toLocaleDateString('en-CA'),
   );
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState({
@@ -57,7 +57,7 @@ export default function Bookings() {
     customer: "",
     service: "",
     price: 0,
-    date: new Date().toISOString().split("T")[0],
+    date: new Date().toLocaleDateString('en-CA'),
     time: "09:30",
     phone: "",
   });
@@ -66,8 +66,8 @@ export default function Bookings() {
   const [showBusyModal, setShowBusyModal] = useState(false);
   const [busyForm, setBusyForm] = useState({
     mode: "range",
-    date: new Date().toISOString().split("T")[0],
-    endDate: new Date().toISOString().split("T")[0],
+    date: new Date().toLocaleDateString('en-CA'),
+    endDate: new Date().toLocaleDateString('en-CA'),
     startTime: "13:00",
     endTime: "15:00",
   });
@@ -86,7 +86,7 @@ export default function Bookings() {
   const maxClosureDate = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 14);
-    return d.toISOString().split("T")[0];
+    return d.toLocaleDateString('en-CA');
   }, []);
 
   // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 30 นาที)
@@ -246,16 +246,34 @@ export default function Bookings() {
     }
   };
 
-  const fetchBookings = useCallback(async (isSilent = false) => {
+  const fetchBookings = useCallback(async (isSilent = false, isRealtimeEvent = false) => {
     if (!supabase) return;
     if (!isSilent) setLoading(true);
 
     try {
       // 1. Fetch Bookings
-      const { data: bookingsData, error: bError } = await supabase
+      let query = supabase
         .from("bookings")
-        .select("*")
-        .eq("booking_date", selectedDate)
+        .select("*");
+
+      // If realtime event, fetch wider date range (current month) to catch rescheduled bookings
+      if (isRealtimeEvent) {
+        const today = new Date(selectedDate);
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+          .toISOString()
+          .split('T')[0];
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+          .toISOString()
+          .split('T')[0];
+        query = query
+          .gte("booking_date", monthStart)
+          .lte("booking_date", monthEnd);
+      } else {
+        // Normal case: fetch only selected date
+        query = query.eq("booking_date", selectedDate);
+      }
+
+      const { data: bookingsData, error: bError } = await query
         .order("booking_time", { ascending: true });
 
       if (bError) throw bError;
@@ -292,7 +310,9 @@ export default function Bookings() {
         }
       }
 
-      const mapped = bookingsData.map((b) => ({
+      const mapped = bookingsData
+        .filter((b) => !isRealtimeEvent || b.booking_date === selectedDate) // Filter to selected date if realtime
+        .map((b) => ({
         id: b.id,
         customer:
           (b.user_id === user?.id)
@@ -367,8 +387,8 @@ export default function Bookings() {
         { event: '*', schema: 'public', table: 'bookings' },
         (payload) => {
           console.log('🔄 Realtime update detected:', payload.eventType);
-          // Small debounce to avoid multiple fetches if multiple changes occur at once
-          fetchBookings(true);
+          // Fetch with wider date range to catch rescheduled bookings
+          fetchBookings(true, true);
         }
       )
       .on(
@@ -501,7 +521,7 @@ export default function Bookings() {
 
     setShowWalkInModal(false);
     setWalkInForm({
-      date: new Date().toISOString().split("T")[0],
+      date: new Date().toLocaleDateString('en-CA'),
       time: "",
       phone: "",
       service: "",
@@ -636,14 +656,24 @@ export default function Bookings() {
   // ฟังก์ชันเลื่อนวัน
   const handlePreviousDay = () => {
     const currentDate = new Date(selectedDate);
-    currentDate.setDate(currentDate.getDate() - 1);
-    setSelectedDate(currentDate.toISOString().split("T")[0]);
+    const previousDate = new Date(currentDate);
+    previousDate.setDate(previousDate.getDate() - 1);
+    
+    // ไม่อนุญาตให้ไปวันที่ผ่านมาแล้ว
+    const today = new Date().toLocaleDateString('en-CA');
+    const previousDateStr = previousDate.toLocaleDateString('en-CA');
+    if (previousDateStr < today) {
+      showNotification("ไม่สามารถดูวันที่ผ่านมาแล้วได้ครับ", "warning");
+      return;
+    }
+    
+    setSelectedDate(previousDateStr);
   };
 
   const handleNextDay = () => {
     const currentDate = new Date(selectedDate);
     currentDate.setDate(currentDate.getDate() + 1);
-    setSelectedDate(currentDate.toISOString().split("T")[0]);
+    setSelectedDate(currentDate.toLocaleDateString('en-CA'));
   };
 
   // ฟอร์แมตวันที่เป็นภาษาไทย (พ.ศ. format)
@@ -774,7 +804,18 @@ export default function Bookings() {
           <input
             type="date"
             value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
+            min={new Date().toLocaleDateString('en-CA')}
+            onChange={(e) => {
+              const selectedDate = e.target.value;
+              const today = new Date().toLocaleDateString('en-CA');
+              if (selectedDate < today) {
+                showNotification("ไม่สามารถดูวันที่ผ่านมาแล้วได้ครับ", "warning");
+                e.target.value = today;
+                setSelectedDate(today);
+                return;
+              }
+              setSelectedDate(selectedDate);
+            }}
             className="w-64 bg-zinc-950 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-lg text-white focus:border-amber-500/50 outline-none transition-all font-num"
           />
         </div>
@@ -836,8 +877,9 @@ export default function Bookings() {
                       "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:border-emerald-500/50";
                     break;
                   case "Cancelled":
+                    // Don't show cancelled bookings - treat as available
                     statusStyles =
-                      "bg-red-500/10 border-red-500/20 text-red-500 hover:border-red-500/50";
+                      "bg-zinc-950/50 border-white/5 text-zinc-500 hover:border-white/20";
                     break;
                   default:
                     statusStyles =
@@ -863,13 +905,11 @@ export default function Bookings() {
                     <div className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-red-500 shadow-lg shadow-red-500/50" />
                   )}
 
-                  {isBooked && !isSelected && (
+                  {isBooked && !isSelected && status !== "Cancelled" && (
                     <div
                       className={`absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full shadow-lg ${status === "Completed"
                         ? "bg-emerald-500 shadow-emerald-500/50"
-                        : status === "Cancelled"
-                          ? "bg-red-500 shadow-red-500/50"
-                          : "bg-amber-400 shadow-amber-500/50"
+                        : "bg-amber-400 shadow-amber-500/50"
                         }`}
                     />
                   )}
@@ -899,12 +939,6 @@ export default function Bookings() {
                 <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
               </div>
               <span className="text-zinc-400">เสร็จสิ้น / Completed</span>
-            </div>
-            <div className="flex items-center gap-3 text-sm font-bold">
-              <div className="w-5 h-5 rounded-md bg-zinc-800 border border-white/10 relative flex items-center justify-center">
-                <div className="w-3.5 h-3.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />
-              </div>
-              <span className="text-zinc-400">ยกเลิก / Cancelled</span>
             </div>
           </div>
         </div>
@@ -1287,10 +1321,18 @@ export default function Bookings() {
                     type="date"
                     required
                     value={walkInForm.date}
-                    onChange={(e) =>
-                      setWalkInForm({ ...walkInForm, date: e.target.value })
-                    }
-                    min={new Date().toISOString().split("T")[0]}
+                    onChange={(e) => {
+                      const selectedDate = e.target.value;
+                      const today = new Date().toLocaleDateString('en-CA');
+                      if (selectedDate < today) {
+                        showNotification("ไม่สามารถเพิ่ม Walk-in วันที่ผ่านมาแล้วได้ครับ", "warning");
+                        e.target.value = today;
+                        setWalkInForm({ ...walkInForm, date: today });
+                        return;
+                      }
+                      setWalkInForm({ ...walkInForm, date: selectedDate });
+                    }}
+                    min={new Date().toLocaleDateString('en-CA')}
                     className="w-full bg-zinc-950 border border-white/10 rounded-xl px-5 py-3 text-lg text-white focus:border-amber-500 outline-none"
                   />
                 </div>
@@ -1369,7 +1411,7 @@ export default function Bookings() {
 
                     // Check if slot is in the past (for today)
                     const now = new Date();
-                    const todayDate = now.toISOString().split('T')[0];
+                    const todayDate = now.toLocaleDateString('en-CA');
                     const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
                     const isPast = walkInForm.date === todayDate && slot < currentTimeStr;
 
@@ -1419,7 +1461,7 @@ export default function Bookings() {
                         {displaySlot}
 
                         {/* Status Dot for Walk-in Modal Grid */}
-                        {!isDisabled && isBooked && (
+                        {!isDisabled && isBooked && status !== "Cancelled" && (
                           <div className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-400" />
                         )}
                         {isDisabled && isBooked && status === "Completed" && (
@@ -1514,7 +1556,7 @@ export default function Bookings() {
                       <input
                         type="date"
                         value={busyForm.date}
-                        min={new Date().toISOString().split("T")[0]}
+                        min={new Date().toLocaleDateString('en-CA')}
                         max={maxClosureDate}
                         onChange={(e) =>
                           setBusyForm({ ...busyForm, date: e.target.value })
@@ -1546,7 +1588,7 @@ export default function Bookings() {
                     <input
                       type="date"
                       value={busyForm.date}
-                      min={new Date().toISOString().split("T")[0]}
+                      min={new Date().toLocaleDateString('en-CA')}
                       max={maxClosureDate}
                       onChange={(e) =>
                         setBusyForm({ ...busyForm, date: e.target.value })
