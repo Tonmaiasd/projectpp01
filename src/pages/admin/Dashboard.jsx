@@ -19,6 +19,7 @@ export default function Dashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('en-CA'));
   const [selectedMonth, setSelectedMonth] = useState(new Date().toLocaleDateString('en-CA').slice(0, 7));
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
+  const [statusFilter, setStatusFilter] = useState('All'); // 'All' | 'Pending' | 'Completed' | 'Cancelled'
 
   const fetchData = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -110,6 +111,11 @@ export default function Dashboard() {
     const pending = filtered.filter(b => b.status === 'Pending').length;
     const completed = filtered.filter(b => b.status === 'Completed').length;
 
+    // Apply Status Filter
+    if (statusFilter !== 'All') {
+      filtered = filtered.filter(b => b.status === statusFilter);
+    }
+
     const statsData = [
       {
         title: `รายได้${periodLabel} (${period === 'daily' ? 'ยืนยัน/เสร็จสิ้น' : 'รวมทั้งหมด'})`,
@@ -138,7 +144,7 @@ export default function Dashboard() {
     ];
 
     return { stats: statsData, filteredBookings: filtered, subLabel };
-  }, [bookings, period, selectedDate, selectedMonth, selectedYear]);
+  }, [bookings, period, selectedDate, selectedMonth, selectedYear, statusFilter]);
 
   // Pagination for dashboard bookings
   const ITEMS_PER_PAGE = 10;
@@ -151,7 +157,7 @@ export default function Dashboard() {
   // Reset page when period changes
   useEffect(() => {
     setDashboardPage(1);
-  }, [period, selectedDate, selectedMonth, selectedYear]);
+  }, [period, selectedDate, selectedMonth, selectedYear, statusFilter]);
 
   const getStatusBadge = (status) => {
     const styles = {
@@ -269,12 +275,30 @@ export default function Dashboard() {
 
       {/* Recent Bookings Table */}
       <div className="bg-zinc-900 border border-white/5 rounded-2xl shadow-xl overflow-hidden">
-        <div className="p-6 border-b border-white/5 flex justify-between items-center">
+        <div className="p-6 border-b border-white/5 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h2 className="text-xl font-bold text-white">รายการจองในช่วงที่เลือก</h2>
             <p className="text-zinc-500 text-sm mt-1">แสดงรายการทั้งหมดตามสรุป {subLabel}</p>
           </div>
-          <button className="text-sm text-amber-500 hover:text-amber-400 font-medium transition-colors" onClick={() => window.location.href = '/admin/bookings'}>ดูทั้งหมด &rarr;</button>
+          <div className="flex flex-wrap items-center gap-2">
+            {[
+              { id: 'All', label: 'ทั้งหมด' },
+              { id: 'Pending', label: 'รอดำเนินการ', color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
+              { id: 'Completed', label: 'เสร็จสิ้น', color: 'text-green-500', bg: 'bg-green-500/10', border: 'border-green-500/20' },
+              { id: 'Cancelled', label: 'ยกเลิก', color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20' },
+            ].map((btn) => (
+              <button
+                key={btn.id}
+                onClick={() => setStatusFilter(btn.id)}
+                className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${statusFilter === btn.id
+                  ? (btn.id === 'All' ? 'bg-zinc-100 text-black border-zinc-100 shadow-lg' : `${btn.bg} ${btn.color} ${btn.border} shadow-lg scale-105`)
+                  : 'bg-zinc-950 text-zinc-500 border-white/5 hover:border-white/10 hover:text-zinc-300'
+                  }`}
+              >
+                {btn.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
