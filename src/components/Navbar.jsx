@@ -78,11 +78,7 @@ export default function Navbar() {
   return (
     <>
       <nav
-        className={`sticky top-0 w-full z-50 transition-all duration-500 border-b ${
-          scrolled
-            ? "bg-zinc-950/80 backdrop-blur-xl border-white/10 py-3 shadow-lg shadow-black/50"
-            : "bg-transparent border-transparent py-6"
-        }`}
+        className={`sticky top-0 w-full z-50 transition-all duration-500  bg-black`}
       >
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex justify-between items-center">

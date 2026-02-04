@@ -434,7 +434,9 @@ export default function Booking() {
             booking_time: bookingData.time,
             price: finalPrice,
             applied_promo: selectedPromotion?.code || null,
-            status: 'Pending'
+            status: 'Pending',
+            reschedule_count: 0,
+            update_count: 0
           }
         ])
         .select('*')
@@ -568,10 +570,10 @@ export default function Booking() {
       </div>
 
       {/* --- CONTENT GRID --- */}
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="max-w-8xl mx-auto px-6 py-8">
         <div className="flex items-center gap-2 mb-6">
           <Sparkles className="w-5 h-5 text-amber-500" />
-          <h2 className="text-lg font-bold text-zinc-300">รายการแพ็คเกจ (<span className="font-num">{filteredPackages.length}</span>)</h2>
+          <h2 className="text-2xl font-bold text-zinc-300">รายการแพ็คเกจ (<span className="font-num">{filteredPackages.length}</span>)</h2>
         </div>
 
         {/* Loading / Error / Empty states */}
@@ -614,11 +616,11 @@ export default function Booking() {
 
         {!loading && !error && packages.length > 0 && (
           <>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               {paginatedServices.map((pkg) => (
                 <div key={pkg.id} className="bg-zinc-900 rounded-3xl p-4 shadow-xl hover:shadow-amber-500/10 transition-all duration-300 group border border-white/10 flex flex-col h-full hover:border-amber-500/30">
                   {/* Image Area */}
-                  <div className="relative h-56 rounded-2xl overflow-hidden mb-4 bg-zinc-800">
+                  <div className="relative h-85 rounded-2xl overflow-hidden mb-4 bg-zinc-800">
                     <img src={pkg.img} alt={pkg.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-90 group-hover:opacity-100" />
                     <div className="absolute top-3 left-3 flex gap-2">
                       {pkg.badge && (
@@ -638,8 +640,8 @@ export default function Booking() {
                   <div className="grow flex flex-col">
                     <div className="flex justify-between items-start mb-2">
                       <div>
-                        <h3 className="font-serif font-bold text-xl text-white leading-tight mb-1 group-hover:text-amber-500 transition-colors">{pkg.name}</h3>
-                        <div className="flex items-center gap-3 text-xs text-zinc-500 font-medium">
+                        <h3 className="font-serif font-bold text-2xl text-white leading-tight mb-1 group-hover:text-amber-500 transition-colors">{pkg.name}</h3>
+                        <div className="flex items-center gap-3 text-sm text-zinc-500 font-medium">
                           <span className="flex items-center gap-1 text-zinc-400"><Clock className="w-3 h-3 text-amber-500" /> <span className="font-num">{pkg.duration}</span> นาที</span>
                           <span className="w-1 h-1 bg-zinc-700 rounded-full"></span>
                           <span className="text-zinc-400">{pkg.category}</span>

@@ -440,12 +440,27 @@ app.post('/api/reschedule-booking', async (req, res) => {
   try {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // 0. Check Reschedule Count
+    const { data: existingBooking, error: fetchError } = await supabaseAdmin
+      .from('bookings')
+      .select('reschedule_count')
+      .eq('id', bookingId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const currentCount = existingBooking.reschedule_count || 0;
+    if (currentCount >= 2) {
+      return res.status(400).json({ error: 'คุณได้ใช้สิทธิ์เลื่อนการจองครบ 2 ครั้งแล้ว ไม่สามารถดำเนินการต่อได้' });
+    }
+
     // 1. Update Booking
     const { data: booking, error: updateError } = await supabaseAdmin
       .from('bookings')
       .update({
         booking_date: newDate,
-        booking_time: newTime
+        booking_time: newTime,
+        reschedule_count: currentCount + 1
       })
       .eq('id', bookingId)
       .select()
@@ -559,13 +574,28 @@ app.post('/api/user-update-booking', async (req, res) => {
   try {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // 0. Check Update Count
+    const { data: existingBooking, error: fetchError } = await supabaseAdmin
+      .from('bookings')
+      .select('update_count')
+      .eq('id', bookingId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const currentCount = existingBooking.update_count || 0;
+    if (currentCount >= 2) {
+      return res.status(400).json({ error: 'คุณได้ใช้สิทธิ์แก้ไขชื่อทรงผมครบ 2 ครั้งแล้ว ไม่สามารถดำเนินการต่อได้' });
+    }
+
     // 1. Update Booking
     const { data: booking, error: updateError } = await supabaseAdmin
       .from('bookings')
       .update({
         service_name: serviceName,
         price: price,
-        applied_promo: appliedPromo || null
+        applied_promo: appliedPromo || null,
+        update_count: currentCount + 1
       })
       .eq('id', bookingId)
       .select()
@@ -602,7 +632,7 @@ async function sendLineNotification(supabaseAdmin, booking, customMessage = null
     return; // Don't throw, just skip
   }
 
-  const defaultMsg = `📢 คุณ ${booking.customer_name} ครับ\nใกล้ถึงคิวของคุณแล้วสำหรับการบริการ: ${booking.service_name}\nเวลา: ${booking.booking_time.slice(0, 5)} น.\n\nกรุณาเตรียมตัวเข้ามาใช้บริการที่ร้าน Lor Loei Cuts ได้เลยครับ ✨`;
+  const defaultMsg = `📢 คุณ ${booking.customer_name} ครับ\nใกล้ถึงคิวของคุณแล้วสำหรับการบริการ: ${booking.service_name}\nเวลา: ${booking.booking_time.slice(0, 5)} น.\n\nกรุณาเตรียมตัวเดินทางมาใช้บริการที่ร้าน Lor Loei Cuts ภายใน 15 นาทีได้เลยครับ ✨`;
 
   const message = {
     to: lineUserId,
@@ -873,77 +903,163 @@ app.listen(PORT, () => {
   // Start the auto-notification loop
   // Start the auto-notification and cleanup loop
   setInterval(() => {
-    runAutoNotificationCheck();
+    // runAutoNotificationCheck();
     checkExpiredPromotions();
+    runOverdueBookingCleanup();
   }, 60000);
   console.log('🚀 Auto-notification sync active (Checking every minute)');
 });
 
-const runAutoNotificationCheck = async () => {
+// Helper function to send LINE notifications
+const sendLineNotification = async (supabaseAdmin, booking, messageText) => {
+  if (!LINE_CHANNEL_ACCESS_TOKEN) {
+    console.warn('LINE_CHANNEL_ACCESS_TOKEN is not set. Skipping LINE notification.');
+    return;
+  }
+
+  let lineUserId = null;
+  if (booking.user_id) {
+    const { data: p } = await supabaseAdmin.from('profiles').select('line_user_id').eq('id', booking.user_id).single();
+    lineUserId = p?.line_user_id;
+  }
+
+  if (lineUserId) {
+    const message = {
+      to: lineUserId,
+      messages: [
+        {
+          type: 'text',
+          text: messageText
+        }
+      ]
+    };
+
+    await axios.post(LINE_PUSH_API, message, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`
+      }
+    });
+    console.log(`✅ Sent LINE notification to user ${lineUserId} for booking ${booking.id}`);
+  } else {
+    console.warn(`No LINE user ID found for booking ${booking.id}. Skipping LINE notification.`);
+  }
+};
+
+// const runAutoNotificationCheck = async () => {
+//   const SUPABASE_URL = process.env.SUPABASE_URL;
+//   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+//   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !LINE_CHANNEL_ACCESS_TOKEN) return;
+//
+//   try {
+//     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+//     // Get date in YYYY-MM-DD for Thailand (GMT+7)
+//     const nowLocal = new Date(new Date().getTime() + (7 * 60 * 60 * 1000));
+//     const today = nowLocal.toISOString().split('T')[0];
+//
+//     // Clear notified set at midnight (roughly)
+//     if (nowLocal.getUTCHours() === 0 && nowLocal.getUTCMinutes() === 0) {
+//       notifiedBookings.clear();
+//     }
+//
+//     const { data: bookings, error } = await supabaseAdmin
+//       .from('bookings')
+//       .select('*')
+//       .eq('booking_date', today)
+//       .in('status', ['Pending', 'Confirmed']);
+//
+//     if (error || !bookings) return;
+//
+//     const currentHour = nowLocal.getUTCHours();
+//     const currentMin = nowLocal.getUTCMinutes();
+//
+//     for (const b of bookings) {
+//       if (notifiedBookings.has(b.id)) continue;
+//
+//       const [bh, bm] = b.booking_time.split(':').map(Number);
+//       const diffMins = (bh * 60 + bm) - (currentHour * 60 + currentMin);
+//
+//       // Notify 15 minutes before the booking
+//       if (diffMins >= 0 && diffMins <= 15) {
+//         let lineUserId = null;
+//         if (b.user_id) {
+//           const { data: p } = await supabaseAdmin.from('profiles').select('line_user_id').eq('id', b.user_id).single();
+//           lineUserId = p?.line_user_id;
+//         }
+//
+//         if (lineUserId) {
+//           console.log(`[AutoNotify] Sending to ${b.customer_name} for ${b.booking_time}`);
+//           const message = {
+//             to: lineUserId,
+//             messages: [
+//               {
+//                 type: 'text',
+//                 text: `🔔 แจ้งเตือนอัตโนมัติ: คุณ ${b.customer_name} ครับ\nใกล้ถึงเวลานัดของคุณแล้วในเวลา ${b.booking_time.slice(0, 5)} น. 🕒\n\nกรุณาเตรียมตัวเข้ามาใช้บริการได้เลยครับ ✨`
+//               }
+//             ]
+//           };
+//
+//           await axios.post(LINE_PUSH_API, message, {
+//             headers: {
+//               'Content-Type': 'application/json',
+//               'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`
+//             }
+//           });
+//           notifiedBookings.add(b.id);
+//         }
+//       }
+//     }
+//   } catch (err) {
+//     console.error('AutoNotification Error:', err.message);
+//   }
+// };
+
+const runOverdueBookingCleanup = async () => {
   const SUPABASE_URL = process.env.SUPABASE_URL;
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !LINE_CHANNEL_ACCESS_TOKEN) return;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return;
 
   try {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    // Get date in YYYY-MM-DD for Thailand (GMT+7)
+    // Get current date in Thailand (GMT+7)
     const nowLocal = new Date(new Date().getTime() + (7 * 60 * 60 * 1000));
-    const today = nowLocal.toISOString().split('T')[0];
+    const todayStr = nowLocal.toISOString().split('T')[0];
 
-    // Clear notified set at midnight (roughly)
-    if (nowLocal.getUTCHours() === 0 && nowLocal.getUTCMinutes() === 0) {
-      notifiedBookings.clear();
-    }
-
+    // Find Pending/Confirmed bookings from PREVIOUS days (booking_date < today)
     const { data: bookings, error } = await supabaseAdmin
       .from('bookings')
       .select('*')
-      .eq('booking_date', today)
+      .lt('booking_date', todayStr)
       .in('status', ['Pending', 'Confirmed']);
 
     if (error || !bookings) return;
 
-    const currentHour = nowLocal.getUTCHours();
-    const currentMin = nowLocal.getUTCMinutes();
-
     for (const b of bookings) {
-      if (notifiedBookings.has(b.id)) continue;
+      console.log(`[Cleanup] Cancelling overdue booking #${b.id} (${b.customer_name}) - Date: ${b.booking_date} (Overdue by 1 day+)`);
 
-      const [bh, bm] = b.booking_time.split(':').map(Number);
-      const diffMins = (bh * 60 + bm) - (currentHour * 60 + currentMin);
+      // 1. Update status to Cancelled
+      const { error: updateError } = await supabaseAdmin
+        .from('bookings')
+        .update({ status: 'Cancelled' })
+        .eq('id', b.id);
 
-      // Notify 15 minutes before the booking
-      if (diffMins >= 0 && diffMins <= 15) {
-        let lineUserId = null;
-        if (b.user_id) {
-          const { data: p } = await supabaseAdmin.from('profiles').select('line_user_id').eq('id', b.user_id).single();
-          lineUserId = p?.line_user_id;
-        }
+      if (updateError) {
+        console.error(`[Cleanup] Failed to cancel booking #${b.id}:`, updateError.message);
+        continue;
+      }
 
-        if (lineUserId) {
-          console.log(`[AutoNotify] Sending to ${b.customer_name} for ${b.booking_time}`);
-          const message = {
-            to: lineUserId,
-            messages: [
-              {
-                type: 'text',
-                text: `🔔 แจ้งเตือนอัตโนมัติ: คุณ ${b.customer_name} ครับ\nใกล้ถึงเวลานัดของคุณแล้วในเวลา ${b.booking_time.slice(0, 5)} น. 🕒\n\nกรุณาเตรียมตัวเข้ามาใช้บริการได้เลยครับ ✨`
-              }
-            ]
-          };
+      // 2. Notify User via LINE
+      const formattedDate = new Date(b.booking_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+      const msg = `❌ ระบบยกเลิกคิวอัตโนมัติ\n\nเรียนคุณ ${b.customer_name}\nเนื่องจากเลยเวลานัดเดิมของคุณเมื่อวันที่ ${formattedDate} และเลยกำหนดมาแล้ว 1 วัน ระบบจึงขออนุญาตยกเลิกคิวของคุณโดยอัตโนมัติครับ 🙏\n\nหากต้องการใช้บริการ รบกวนทำการจองใหม่ในภายหลังครับ ✨`;
 
-          await axios.post(LINE_PUSH_API, message, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`
-            }
-          });
-          notifiedBookings.add(b.id);
-        }
+      try {
+        await sendLineNotification(supabaseAdmin, b, msg);
+      } catch (notifyErr) {
+        console.warn(`[Cleanup] Failed to notify ${b.customer_name}:`, notifyErr.message);
       }
     }
   } catch (err) {
-    console.error('AutoNotification Error:', err.message);
+    console.error('Overdue Cleanup Error:', err.message);
   }
 };
 
@@ -954,7 +1070,6 @@ const checkExpiredPromotions = async () => {
 
   try {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    // Get Local Date (Thailand GMT+7)
     const nowLocal = new Date(new Date().getTime() + (7 * 60 * 60 * 1000));
     const today = nowLocal.toISOString().split('T')[0];
 
@@ -987,5 +1102,3 @@ const checkExpiredPromotions = async () => {
     console.error('Error in checkExpiredPromotions:', err.message);
   }
 };
-
-

@@ -804,16 +804,24 @@ export default function Profile() {
           {booking.status === 'Pending' && (
             <div className="flex flex-wrap gap-2">
               <button
+                disabled={booking.update_count >= 2}
                 onClick={() => handleEditBookingClick(booking)}
-                className="text-xs text-blue-400 hover:text-white flex items-center gap-1.5 transition-all border border-blue-400/30 bg-blue-400/5 px-3 py-1.5 rounded-lg hover:bg-blue-400/20 active:scale-95"
+                className={`text-xs flex items-center gap-1.5 transition-all border px-3 py-1.5 rounded-lg active:scale-95 ${booking.update_count >= 2
+                    ? "text-zinc-500 border-zinc-500/30 bg-zinc-500/5 cursor-not-allowed opacity-50"
+                    : "text-blue-400 hover:text-white border-blue-400/30 bg-blue-400/5 hover:bg-blue-400/20"
+                  }`}
               >
-                <Edit2 size={14} /> แก้ไขทรงผม
+                <Edit2 size={14} /> {booking.update_count >= 2 ? 'แก้ไขครบแล้ว' : 'แก้ไขทรงผม'}
               </button>
               <button
+                disabled={booking.reschedule_count >= 2}
                 onClick={() => handleRescheduleRequest(booking)}
-                className="text-xs text-amber-500 hover:text-white flex items-center gap-1.5 transition-all border border-amber-500/30 bg-amber-500/5 px-3 py-1.5 rounded-lg hover:bg-amber-500/20 active:scale-95"
+                className={`text-xs flex items-center gap-1.5 transition-all border px-3 py-1.5 rounded-lg active:scale-95 ${booking.reschedule_count >= 2
+                    ? "text-zinc-500 border-zinc-500/30 bg-zinc-500/5 cursor-not-allowed opacity-50"
+                    : "text-amber-500 hover:text-white border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/20"
+                  }`}
               >
-                <CalendarClock size={14} /> เลื่อนคิว
+                <CalendarClock size={14} /> {booking.reschedule_count >= 2 ? 'เลื่อนครบแล้ว' : 'เลื่อนคิว'}
               </button>
               <button
                 onClick={() => handleCancelBooking(booking)}
@@ -1196,7 +1204,7 @@ export default function Profile() {
       {showRescheduleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
           <div className="bg-zinc-900 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out]">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-4">
               <h3 className="text-2xl font-serif font-bold text-white flex items-center gap-3">
                 <CalendarClock className="text-amber-500" size={24} /> เลื่อนคิวจอง
               </h3>
@@ -1206,6 +1214,13 @@ export default function Profile() {
               >
                 <X size={24} />
               </button>
+            </div>
+
+            <div className="mb-6 flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+              <AlertCircle size={14} className="text-amber-500" />
+              <p className="text-xs font-bold text-amber-500">
+                คุณเหลือสิทธิ์ในการเลื่อนอีก: <span className="text-white bg-amber-500 px-1.5 py-0.5 rounded ml-1">{2 - (activeBookings.find(b => b.id === rescheduleData.bookingId)?.reschedule_count || 0)}</span> ครั้ง
+              </p>
             </div>
 
             <div className="space-y-6">
@@ -1349,7 +1364,7 @@ export default function Profile() {
       {showEditBookingModal && bookingToEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
           <div className="bg-zinc-900 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out] max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-4">
               <h3 className="text-2xl font-serif font-bold text-white flex items-center gap-3">
                 <Edit2 className="text-blue-400" size={24} /> แก้ไขการจอง
               </h3>
@@ -1359,6 +1374,13 @@ export default function Profile() {
               >
                 <X size={24} />
               </button>
+            </div>
+
+            <div className="mb-6 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+              <AlertCircle size={14} className="text-blue-400" />
+              <p className="text-xs font-bold text-blue-400">
+                คุณเหลือสิทธิ์ในการแก้ไขอีก: <span className="text-white bg-blue-500 px-1.5 py-0.5 rounded ml-1">{2 - (bookingToEdit?.update_count || 0)}</span> ครั้ง
+              </p>
             </div>
 
             <div className="space-y-6">
