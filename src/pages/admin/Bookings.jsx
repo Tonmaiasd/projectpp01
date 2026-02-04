@@ -295,11 +295,9 @@ export default function Bookings() {
       const mapped = bookingsData.map((b) => ({
         id: b.id,
         customer:
-          b.service_name === "Walk-in"
-            ? b.customer_name
-            : profilesMap[b.user_id]?.full_name ||
-            b.customer_name ||
-            (b.user_id ? String(b.user_id).slice(0, 8) + "…" : "-"),
+          (b.user_id === user?.id)
+            ? b.customer_name || "Walk-in"
+            : profilesMap[b.user_id]?.full_name || b.customer_name || (b.user_id ? String(b.user_id).slice(0, 8) + "…" : "-"),
         service: b.service_name,
         date: b.booking_date,
         time: b.booking_time,
@@ -443,14 +441,19 @@ export default function Bookings() {
   const handleWalkInSubmit = async (e) => {
     e.preventDefault();
 
-    // เช็คแค่ เวลา และ เบอร์โทร
-    if (!walkInForm.time || !walkInForm.phone) {
-      showNotification("กรุณากรอกข้อมูลให้ครบถ้วน (เวลา และ เบอร์โทร)", "warning");
+    // เช็คแค่ เวลา, บริการ และ เบอร์โทร (ต้องครบ 10 หลัก)
+    if (!walkInForm.time || !walkInForm.phone || !walkInForm.service) {
+      showNotification("กรุณากรอกข้อมูลให้ครบถ้วน (เวลา, บริการ และ เบอร์โทร)", "warning");
+      return;
+    }
+
+    if (walkInForm.phone.length !== 10) {
+      showNotification("กรุณาระบุเบอร์โทรศัพท์ให้ครบ 10 หลัก", "warning");
       return;
     }
 
     const newBooking = {
-      user_id: user?.id,
+      user_id: user?.id, // กลับมาใช้ user.id เพื่อให้ผ่าน Constraint NOT NULL ของ Database
       // บันทึกเบอร์โทรไว้ในฟิลด์ customer_name สำหรับ Walk-in
       customer_name: walkInForm.phone,
       service_name: walkInForm.service || "Walk-in",
@@ -1299,6 +1302,8 @@ export default function Bookings() {
                     type="tel"
                     required
                     maxLength="10"
+                    minLength="10"
+                    pattern="[0-9]{10}"
                     placeholder="08X-XXX-XXXX"
                     value={walkInForm.phone}
                     onChange={(e) => {
