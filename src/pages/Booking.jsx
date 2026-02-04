@@ -517,7 +517,7 @@ export default function Booking() {
             <ArrowLeft className="w-6 h-6" />
           </button>
 
-          <h1 className="text-xl font-serif font-bold text-white">
+          <h1 className="text-3xl font-serif font-bold text-white">
             บริการของเรา
           </h1>
 
