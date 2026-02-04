@@ -910,42 +910,6 @@ app.listen(PORT, () => {
   console.log('🚀 Auto-notification sync active (Checking every minute)');
 });
 
-// Helper function to send LINE notifications
-const sendLineNotification = async (supabaseAdmin, booking, messageText) => {
-  if (!LINE_CHANNEL_ACCESS_TOKEN) {
-    console.warn('LINE_CHANNEL_ACCESS_TOKEN is not set. Skipping LINE notification.');
-    return;
-  }
-
-  let lineUserId = null;
-  if (booking.user_id) {
-    const { data: p } = await supabaseAdmin.from('profiles').select('line_user_id').eq('id', booking.user_id).single();
-    lineUserId = p?.line_user_id;
-  }
-
-  if (lineUserId) {
-    const message = {
-      to: lineUserId,
-      messages: [
-        {
-          type: 'text',
-          text: messageText
-        }
-      ]
-    };
-
-    await axios.post(LINE_PUSH_API, message, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`
-      }
-    });
-    console.log(`✅ Sent LINE notification to user ${lineUserId} for booking ${booking.id}`);
-  } else {
-    console.warn(`No LINE user ID found for booking ${booking.id}. Skipping LINE notification.`);
-  }
-};
-
 // const runAutoNotificationCheck = async () => {
 //   const SUPABASE_URL = process.env.SUPABASE_URL;
 //   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
