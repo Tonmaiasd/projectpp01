@@ -546,6 +546,45 @@ app.post('/api/cancel-booking', async (req, res) => {
   }
 });
 
+// Endpoint: ผู้ใช้แก้ไขรายการจอง (เฉพาะทรงผมและโปรโมชั่น) และแจ้งเตือน LINE
+app.post('/api/user-update-booking', async (req, res) => {
+  const { bookingId, serviceName, price, appliedPromo } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!bookingId || !serviceName) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 1. Update Booking
+    const { data: booking, error: updateError } = await supabaseAdmin
+      .from('bookings')
+      .update({
+        service_name: serviceName,
+        price: price,
+        applied_promo: appliedPromo || null
+      })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    // 2. Send LINE Notification
+    const msg = `✍️ แจ้งเตือนการแก้ไขรายการจองครับ\n\nคุณ ${booking.customer_name} ได้แก้ไขรายละเอียด:\n🔹 ทรงผมใหม่: ${serviceName}\n💰 ราคาใหม่: ฿${price}\n🎟️ โปรโมชั่น: ${appliedPromo || '-'}\n\nระบบอัปเดตข้อมูลให้เรียบร้อยแล้วครับ ✨`;
+
+    await sendLineNotification(supabaseAdmin, booking, msg);
+
+    res.json({ success: true, message: 'แก้ไขข้อมูลการจองและแจ้งเตือนเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('Error in /api/user-update-booking:', err.message);
+    res.status(500).json({ error: 'Failed to update booking: ' + err.message });
+  }
+});
+
 // --- HELPER FUNCTION FOR LINE NOTIFICATION ---
 async function sendLineNotification(supabaseAdmin, booking, customMessage = null) {
   let lineUserId = null;

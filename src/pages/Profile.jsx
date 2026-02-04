@@ -50,6 +50,21 @@ export default function Profile() {
   const [showSaveConfirmModal, setShowSaveConfirmModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
+  // --- Edit Booking (Service & Promotion) ---
+  const [showEditBookingModal, setShowEditBookingModal] = useState(false);
+  const [bookingToEdit, setBookingToEdit] = useState(null);
+  const [availableServices, setAvailableServices] = useState([]);
+  const [availablePromotions, setAvailablePromotions] = useState([]);
+  const [editBookingForm, setEditBookingForm] = useState({
+    serviceId: '',
+    serviceName: '',
+    price: 0,
+    promoCode: ''
+  });
+  const [editBookingLoading, setEditBookingLoading] = useState(false);
+  const [fetchDataLoading, setFetchDataLoading] = useState(false);
+  const [showEditSuccessModal, setShowEditSuccessModal] = useState(false);
+
   const showNotification = (message, type = 'info') => {
     setNotification({ show: true, message, type });
     // ไม่ auto close เพื่อให้ user อ่านข้อความได้ชัดเจน
@@ -516,20 +531,13 @@ export default function Profile() {
 
   // ฟังก์ชันสำหรับขอเลื่อนคิว (เปิด Modal)
   const handleRescheduleRequest = (booking) => {
-    // คำนวณวันที่มากที่สุดที่เลื่อนได้ (7 วันจากวันนี้)
-    const today = new Date();
-    const max = new Date(today);
-    max.setDate(today.getDate() + 7);
-    const maxDateStr = max.toISOString().split('T')[0];
-
     setRescheduleData({
       bookingId: booking.id,
-      date: booking.booking_date || today.toISOString().split('T')[0],
+      date: booking.booking_date, // Fix to the same day
       time: '',
       serviceName: booking.service_name,
       currentDate: booking.booking_date,
       currentTime: booking.booking_time,
-      maxDate: maxDateStr
     });
     setShowRescheduleModal(true);
   };
@@ -612,6 +620,120 @@ export default function Profile() {
     }
   };
 
+  // --- Edit Booking Logic ---
+  const fetchServicesAndPromos = async (appliedPromoCode = null) => {
+    setFetchDataLoading(true);
+    try {
+      // 1. Fetch Services
+      const { data: sData } = await supabase.from('services').select('*');
+      setAvailableServices(sData || []);
+
+      // 2. Fetch Active Promotions + The one currently applied to the booking
+      const today = new Date().toLocaleDateString('en-CA');
+      let query = supabase.from('promotions').select('*');
+
+      if (appliedPromoCode) {
+        // Fetch active/valid ones OR the specifically applied one
+        query = query.or(`and(active.eq.true,expire_date.gte.${today}),code.eq."${appliedPromoCode}"`);
+      } else {
+        query = query.eq('active', true).gte('expire_date', today);
+      }
+
+      const { data: pData } = await query;
+      setAvailablePromotions(pData || []);
+    } catch (err) {
+      console.error("Error fetching services/promos:", err);
+    } finally {
+      setFetchDataLoading(false);
+    }
+  };
+
+  const handleEditBookingClick = (booking) => {
+    setBookingToEdit(booking);
+    setEditBookingForm({
+      serviceId: '', // We'll match by name if needed, but better to keep it simple
+      serviceName: booking.service_name,
+      price: booking.price,
+      promoCode: booking.applied_promo || ''
+    });
+    fetchServicesAndPromos(booking.applied_promo);
+    setShowEditBookingModal(true);
+  };
+
+  const handleUpdateBookingSubmit = async () => {
+    if (!editBookingForm.serviceName) return;
+
+    setEditBookingLoading(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/user-update-booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: bookingToEdit.id,
+          serviceName: editBookingForm.serviceName,
+          price: editBookingForm.price,
+          appliedPromo: editBookingForm.promoCode
+        })
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Failed to update booking');
+      }
+
+      setShowEditBookingModal(false);
+      setShowEditSuccessModal(true); // Show the success card
+      fetchBookings(true);
+    } catch (err) {
+      console.error("Error updating booking:", err);
+      showNotification(err.message || "ไม่สามารถแก้ไขข้อมูลได้", "error");
+    } finally {
+      setEditBookingLoading(false);
+    }
+  };
+
+  // Helper to recalculate price when service or promo changes
+  useEffect(() => {
+    if (!showEditBookingModal || !editBookingForm.serviceName || !bookingToEdit) return;
+
+    // --- CRITICAL FIX: If service and promo are the same as original, keep the original price ---
+    // This handles the case where admin edited or deleted a promotion later.
+    const isOriginalState =
+      editBookingForm.serviceName === bookingToEdit.service_name &&
+      (editBookingForm.promoCode || '') === (bookingToEdit.applied_promo || '');
+
+    if (isOriginalState) {
+      setEditBookingForm(prev => ({ ...prev, price: bookingToEdit.price }));
+      return;
+    }
+
+    const selectedService = availableServices.find(s => s.name === editBookingForm.serviceName);
+    if (!selectedService) return;
+
+    let newPrice = selectedService.price;
+    const selectedPromo = availablePromotions.find(p => p.code === editBookingForm.promoCode);
+
+    if (selectedPromo) {
+      const discountText = selectedPromo.discount_text || '';
+      let discount = 0;
+
+      if (discountText.includes('%')) {
+        const percent = parseInt(discountText.replace(/[^0-9]/g, ''));
+        if (!isNaN(percent)) {
+          discount = (selectedService.price * percent) / 100;
+        }
+      } else {
+        const amount = parseInt(discountText.replace(/[^0-9]/g, ''));
+        if (!isNaN(amount)) {
+          discount = amount;
+        }
+      }
+      newPrice = Math.max(0, newPrice - discount);
+    }
+
+    setEditBookingForm(prev => ({ ...prev, price: newPrice }));
+  }, [editBookingForm.serviceName, editBookingForm.promoCode, showEditBookingModal, availableServices, availablePromotions, bookingToEdit]);
+
   // Helper: แสดงสถานะภาษาไทยและสี
   const getStatusDisplay = (status) => {
     switch (status) {
@@ -678,14 +800,20 @@ export default function Profile() {
             <span className="text-xl font-bold font-num text-white">฿{booking.price}</span>
           </div>
 
-          {/* ปุ่มเลื่อนคิว เฉพาะสถานะ Pending */}
+          {/* ปุ่มจัดการคิว เฉพาะสถานะ Pending */}
           {booking.status === 'Pending' && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => handleEditBookingClick(booking)}
+                className="text-xs text-blue-400 hover:text-white flex items-center gap-1.5 transition-all border border-blue-400/30 bg-blue-400/5 px-3 py-1.5 rounded-lg hover:bg-blue-400/20 active:scale-95"
+              >
+                <Edit2 size={14} /> แก้ไขทรงผม
+              </button>
               <button
                 onClick={() => handleRescheduleRequest(booking)}
                 className="text-xs text-amber-500 hover:text-white flex items-center gap-1.5 transition-all border border-amber-500/30 bg-amber-500/5 px-3 py-1.5 rounded-lg hover:bg-amber-500/20 active:scale-95"
               >
-                <CalendarClock size={14} /> เลื่อนคิวจอง
+                <CalendarClock size={14} /> เลื่อนคิว
               </button>
               <button
                 onClick={() => handleCancelBooking(booking)}
@@ -1097,18 +1225,16 @@ export default function Profile() {
 
               {/* Date Selection */}
               <div>
-                <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
-                  <Calendar size={16} /> เลือกวันที่ต้องการเลื่อนไป
-                </label>
-                <input
-                  type="date"
-                  min={new Date().toISOString().split('T')[0]}
-                  max={rescheduleData.maxDate}
-                  value={rescheduleData.date}
-                  onChange={(e) => setRescheduleData({ ...rescheduleData, date: e.target.value, time: '' })}
-                  className="w-full bg-zinc-950 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-amber-500 outline-none transition-all font-num scheme-dark"
-                />
-                <p className="text-[10px] text-amber-500/50 mt-1.5">* สามารถเลื่อนล่วงหน้าได้ไม่เกิน 7 วันครับ</p>
+                {/* Date Display (Read-only: same-day only) */}
+                <div>
+                  <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
+                    <Calendar size={16} /> วันที่ดำเนินการ (เลื่อนได้เฉพาะวันเดิม)
+                  </label>
+                  <div className="w-full bg-zinc-950/50 border border-white/5 rounded-2xl px-5 py-4 text-amber-500 font-num">
+                    {rescheduleData.date}
+                  </div>
+                  <p className="text-[10px] text-amber-500/50 mt-1.5">* ขณะนี้อนุญาตให้เลื่อนคิวได้เฉพาะภายในวันที่เลือกไว้เดิมเท่านั้นครับ</p>
+                </div>
               </div>
 
               {/* Time Selection */}
@@ -1124,7 +1250,13 @@ export default function Profile() {
                         if (busy.is_full_day) return true;
                         return slot >= busy.start_time.slice(0, 5) && slot <= busy.end_time.slice(0, 5);
                       });
-                      const isDisabled = isBooked || isBusy;
+                      const now = new Date();
+                      const todayStr = now.toLocaleDateString('en-CA');
+                      const [curH, curM] = [now.getHours(), now.getMinutes()];
+                      const [slotH, slotM] = slot.split(':').map(Number);
+                      const isPast = rescheduleData.date === todayStr && (slotH < curH || (slotH === curH && slotM <= curM));
+
+                      const isDisabled = isBooked || isBusy || isPast;
 
                       return (
                         <button
@@ -1137,7 +1269,9 @@ export default function Profile() {
                               ? 'bg-red-500/10 text-red-500 border-red-500/20 cursor-not-allowed opacity-40'
                               : isBooked
                                 ? 'bg-amber-500/10 text-amber-500/50 border-amber-500/20 cursor-not-allowed opacity-40'
-                                : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
+                                : isPast
+                                  ? 'bg-zinc-900 text-zinc-600 border-white/5 cursor-not-allowed opacity-30'
+                                  : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
                             }`}
                         >
                           {isBusy ? 'ไม่ว่าง' : slot}
@@ -1208,6 +1342,133 @@ export default function Profile() {
                 ย้อนกลับ
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* --- Edit Booking Modal (Service & Promotion) --- */}
+      {showEditBookingModal && bookingToEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-zinc-900 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out] max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-serif font-bold text-white flex items-center gap-3">
+                <Edit2 className="text-blue-400" size={24} /> แก้ไขการจอง
+              </h3>
+              <button
+                onClick={() => setShowEditBookingModal(false)}
+                className="text-zinc-500 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Current Status Header */}
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 flex gap-4 items-center">
+                <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-black shrink-0">
+                  <Scissors size={24} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-0.5">คิวปัจจุบัน</p>
+                  <h4 className="text-white font-bold truncate">{bookingToEdit.service_name}</h4>
+                  <p className="text-zinc-400 text-xs font-num">{bookingToEdit.booking_date} • {bookingToEdit.booking_time} น.</p>
+                </div>
+              </div>
+
+              {/* Service Selection */}
+              <div>
+                <label className="text-sm font-bold text-zinc-400 mb-3 block">เลือกทรงผมใหม่</label>
+                {fetchDataLoading ? (
+                  <div className="py-4 text-center text-zinc-500 text-sm">กำลังโหลดรายการบริการ...</div>
+                ) : (
+                  <select
+                    value={editBookingForm.serviceName}
+                    onChange={(e) => setEditBookingForm({ ...editBookingForm, serviceName: e.target.value })}
+                    className="w-full bg-zinc-950 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-blue-500 outline-none transition-all"
+                  >
+                    {availableServices.map(s => (
+                      <option key={s.id} value={s.name}>{s.name} (฿{s.price})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Promotion Selection (Dropdown) */}
+              <div>
+                <label className="text-sm font-bold text-zinc-400 mb-3 block">โปรโมชั่น (ส่วนลด)</label>
+                {fetchDataLoading ? (
+                  <div className="py-4 text-center text-zinc-500 text-sm">กำลังโหลดโปรโมชั่น...</div>
+                ) : (
+                  <select
+                    value={editBookingForm.promoCode}
+                    onChange={(e) => setEditBookingForm({ ...editBookingForm, promoCode: e.target.value })}
+                    className="w-full bg-zinc-950 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-blue-500 outline-none transition-all font-num"
+                  >
+                    <option value="">ไม่ใช้โปรโมชั่น</option>
+                    {availablePromotions.map(p => (
+                      <option key={p.id} value={p.code}>
+                        {p.code} ({p.discount_text})
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <p className="text-[10px] text-zinc-500 mt-1.5">* เลือกโปรโมชั่นที่ต้องการนำมาใช้กับทรงผมนี้</p>
+              </div>
+
+              {/* Price Summary */}
+              <div className="pt-4 border-t border-white/5 flex justify-between items-center">
+                <span className="text-zinc-400 font-bold">ราคาใหม่ที่ต้องชำระ:</span>
+                <span className="text-2xl font-bold font-num text-white">฿{editBookingForm.price}</span>
+              </div>
+
+              <div className="pt-4 flex gap-4">
+                <button
+                  onClick={() => setShowEditBookingModal(false)}
+                  className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  disabled={editBookingLoading || fetchDataLoading}
+                  onClick={handleUpdateBookingSubmit}
+                  className="flex-1 py-4 bg-blue-500 hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-2"
+                >
+                  {editBookingLoading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  ) : (
+                    <>บันทึกการแก้ไข</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Edit Booking Success Modal --- */}
+      {showEditSuccessModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl animate-[fadeIn_0.3s_ease-out]">
+          <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] border border-white/10 shadow-2xl p-10 text-center animate-[slideUp_0.4s_ease-out] relative overflow-hidden">
+            {/* Background decoration */}
+            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
+            <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
+
+            <div className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg shadow-blue-500/20 relative">
+              <div className="absolute inset-0 rounded-full animate-ping bg-blue-500/30"></div>
+              <CheckCircle className="text-white relative z-10" size={48} />
+            </div>
+
+            <h3 className="text-3xl font-serif font-bold text-white mb-3">แก้ไขสำเร็จ!</h3>
+            <p className="text-zinc-400 text-sm mb-10 leading-relaxed px-2">
+              เราได้อัปเดตรายละเอียดการจองของคุณเรียบร้อยแล้ว<br />
+              ตรวจสอบข้อมูลใหม่ได้ที่หน้ารายการครับ
+            </p>
+
+            <button
+              onClick={() => setShowEditSuccessModal(false)}
+              className="w-full py-4 bg-white text-black hover:bg-zinc-200 rounded-2xl font-bold transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
+            >
+              ตกลง
+            </button>
           </div>
         </div>
       )}

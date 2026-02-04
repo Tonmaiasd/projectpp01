@@ -37,6 +37,7 @@ export default function Home() {
   const [filterStar, setFilterStar] = useState(0);
 
   const [deleteId, setDeleteId] = useState(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -86,7 +87,7 @@ export default function Home() {
 
     setCommentLoading(true);
     if (!currentUser) {
-      alert("กรุณาเข้าสู่ระบบก่อนแสดงความคิดเห็นครับ");
+      setShowLoginModal(true);
       setCommentLoading(false);
       return;
     }
@@ -145,6 +146,40 @@ export default function Home() {
         }
       `}</style>
 
+      {/* --- Login Required Modal --- */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-1000 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl animate-[fadeIn_0.3s_ease-out]">
+          <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] border border-white/10 shadow-2xl p-10 text-center animate-[slideUp_0.4s_ease-out] relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-linear-to-r from-amber-500 to-amber-600"></div>
+
+            <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-amber-500/10">
+              <UserIcon size={40} />
+            </div>
+
+            <h3 className="text-2xl font-serif font-bold text-white mb-2">กรุณาเข้าสู่ระบบ</h3>
+            <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
+              คุณต้องเข้าสู่ระบบสมาชิกก่อน<br />
+              เพื่อร่วมแสดงความคิดเห็นหรือรีวิวการบริการ
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => navigate("/login")}
+                className="w-full py-4 bg-amber-500 text-black hover:bg-amber-400 rounded-2xl font-bold transition-all shadow-xl active:scale-95 shadow-amber-500/20"
+              >
+                เข้าสู่ระบบตอนนี้
+              </button>
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="w-full py-4 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 rounded-2xl font-bold transition-all active:scale-95"
+              >
+                ไว้ทีหลัง
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- Delete Confirmation Modal --- */}
       {deleteId && (
         <div className="fixed inset-0 z-999 flex items-center justify-center p-4">
@@ -172,7 +207,7 @@ export default function Home() {
           {/* Decorative Glow */}
           <div className="absolute top-20 -right-32 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl"></div>
         </div>
-        
+
         <div className="relative z-10 max-w-350 mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center pt-12">
           <div className="space-y-8 animate-in fade-in slide-in-from-left-12 duration-700">
             <div className="flex items-center gap-5 mb-8">
@@ -208,7 +243,7 @@ export default function Home() {
         {/* Decorative Elements */}
         <div className="absolute top-0 left-0 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl -ml-40 -mt-40"></div>
         <div className="absolute bottom-0 right-0 w-96 h-96 bg-amber-600/5 rounded-full blur-3xl -mr-48 -mb-48"></div>
-        
+
         <div className="max-w-350 mx-auto px-6 text-center relative z-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30 mb-6">
             <Scissors size={18} className="text-amber-500" />
@@ -216,7 +251,7 @@ export default function Home() {
           </div>
           <h2 className="text-5xl md:text-7xl font-serif text-white mb-8">บริการระดับ Masterpiece</h2>
           <p className="text-zinc-400 text-lg max-w-2xl mx-auto mb-16">แต่ละบริการได้รับการออกแบบมาเพื่อให้คุณมีประสบการณ์ที่ดีที่สุด</p>
-          
+
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {displayServices.map((service, idx) => (
               <div key={idx} onClick={() => navigate("/booking")} className="group relative h-125 overflow-hidden border-2 border-white/10 hover:border-amber-500/50 cursor-pointer rounded-2xl transition-all duration-500 hover:shadow-2xl hover:shadow-amber-500/20 animate-in fade-in slide-in-from-bottom-4" style={{
@@ -268,12 +303,12 @@ export default function Home() {
                 <SwiperSlide key={promo.id}>
                   <div className="group relative h-125 rounded-[3rem] overflow-hidden border-2 border-amber-500/30 bg-zinc-900 shadow-2xl hover:shadow-amber-500/50 transition-all duration-500">
                     {/* Background Image */}
-                    <img 
-                      src={promo.image_url || "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=2070&auto=format&fit=crop"} 
+                    <img
+                      src={promo.image_url || "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=2070&auto=format&fit=crop"}
                       alt={promo.title}
                       className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-30 transition-all duration-700 group-hover:scale-105"
                     />
-                    
+
                     {/* Gradient Overlay */}
                     <div className="absolute inset-0 bg-linear-to-t from-zinc-950 via-zinc-950/60 to-transparent"></div>
 
@@ -315,7 +350,7 @@ export default function Home() {
                       )}
 
                       {/* CTA Button */}
-                      <button 
+                      <button
                         onClick={() => navigate("/booking")}
                         className="w-full py-4 bg-linear-to-r from-amber-500 to-amber-600 text-black font-bold rounded-2xl hover:from-amber-400 hover:to-amber-500 transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-lg shadow-amber-500/50 flex items-center justify-center gap-2"
                       >
@@ -337,7 +372,7 @@ export default function Home() {
           <div className="absolute top-40 left-0 w-96 h-96 bg-amber-500 rounded-full blur-3xl"></div>
           <div className="absolute bottom-20 right-0 w-96 h-96 bg-amber-600 rounded-full blur-3xl"></div>
         </div>
-        
+
         <div className="max-w-350 mx-auto px-6 relative z-10">
           <div className="text-center mb-20 space-y-4">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/30">
@@ -356,24 +391,23 @@ export default function Home() {
                   <div className="flex gap-3 justify-center">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button key={star} type="button" onClick={() => setRating(star)} className="transition-all active:scale-75 hover:scale-125">
-                        <Star key={star} size={36} className={`${
-                          star <= rating ? "fill-amber-400 text-amber-400 drop-shadow-lg drop-shadow-amber-400/50" : "text-zinc-600 hover:text-amber-200"
-                        } transition-all duration-200`} />
+                        <Star key={star} size={36} className={`${star <= rating ? "fill-amber-400 text-amber-400 drop-shadow-lg drop-shadow-amber-400/50" : "text-zinc-600 hover:text-amber-200"
+                          } transition-all duration-200`} />
                       </button>
                     ))}
                   </div>
                 </div>
               </div>
               <div className="relative">
-                <textarea 
-                  value={newComment} 
-                  onChange={(e) => setNewComment(e.target.value)} 
-                  placeholder="ร่วมแบ่งปันประสบการณ์ของคุณ..." 
-                  className="w-full bg-zinc-900/50 border-2 border-amber-500/20 focus:border-amber-500/60 rounded-3xl p-6 pr-20 text-white placeholder-zinc-600 focus:outline-none transition-all h-32 resize-none text-base font-light backdrop-blur-sm" 
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="ร่วมแบ่งปันประสบการณ์ของคุณ..."
+                  className="w-full bg-zinc-900/50 border-2 border-amber-500/20 focus:border-amber-500/60 rounded-3xl p-6 pr-20 text-white placeholder-zinc-600 focus:outline-none transition-all h-32 resize-none text-base font-light backdrop-blur-sm"
                 />
-                <button 
-                  type="submit" 
-                  disabled={commentLoading || !newComment.trim()} 
+                <button
+                  type="submit"
+                  disabled={commentLoading || !newComment.trim()}
                   className="absolute bottom-6 right-6 p-4 bg-linear-to-r from-amber-500 to-amber-600 text-black rounded-2xl hover:from-amber-400 hover:to-amber-500 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg hover:shadow-amber-500/50"
                 >
                   {commentLoading ? <div className="w-6 h-6 border-3 border-black/20 border-t-black rounded-full animate-spin"></div> : <Send size={24} />}
@@ -383,25 +417,23 @@ export default function Home() {
           </div>
 
           <div className="flex flex-wrap justify-center gap-3 mb-16">
-            <button 
-              onClick={() => setFilterStar(0)} 
-              className={`px-6 py-2.5 rounded-full border-2 transition-all font-medium ${
-                filterStar === 0 
-                  ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/30" 
+            <button
+              onClick={() => setFilterStar(0)}
+              className={`px-6 py-2.5 rounded-full border-2 transition-all font-medium ${filterStar === 0
+                  ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/30"
                   : "border-amber-500/20 text-zinc-300 hover:border-amber-500/50 hover:bg-amber-500/5"
-              }`}
+                }`}
             >
               ทั้งหมด
             </button>
             {[5, 4, 3, 2, 1].map(s => (
-              <button 
-                key={s} 
-                onClick={() => setFilterStar(s)} 
-                className={`px-6 py-2.5 rounded-full border-2 flex items-center gap-2 transition-all font-medium ${
-                  filterStar === s 
-                    ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/30" 
+              <button
+                key={s}
+                onClick={() => setFilterStar(s)}
+                className={`px-6 py-2.5 rounded-full border-2 flex items-center gap-2 transition-all font-medium ${filterStar === s
+                    ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/30"
                     : "border-amber-500/20 text-zinc-300 hover:border-amber-500/50 hover:bg-amber-500/5"
-                }`}
+                  }`}
               >
                 {s} <Star size={14} className={filterStar === s ? "fill-black" : "fill-amber-500"} />
               </button>
@@ -472,7 +504,7 @@ export default function Home() {
         {/* Decorative Elements */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl -mr-48 -mt-48"></div>
         <div className="absolute bottom-0 left-0 w-96 h-96 bg-amber-600/10 rounded-full blur-3xl -ml-48 -mb-48"></div>
-        
+
         <div className="max-w-350 mx-auto px-6 relative z-10">
           <div className="bg-linear-to-b from-zinc-900/50 to-zinc-950 rounded-3xl overflow-hidden border-2 border-amber-500/20 shadow-2xl hover:border-amber-500/40 transition-all duration-500">
             <div className="grid lg:grid-cols-2">

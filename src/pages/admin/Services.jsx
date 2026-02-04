@@ -15,6 +15,8 @@ export default function Services() {
   const [currentService, setCurrentService] = useState(null); // ถ้าเป็น null คือโหมด Add, ถ้ามีค่าคือโหมด Edit
   const [saving, setSaving] = useState(false);
   const [servicesPage, setServicesPage] = useState(1); // Pagination
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+  const [confirmDelete, setConfirmDelete] = useState(null); // ID of service to delete
 
   // Form State
   const [formData, setFormData] = useState({
@@ -27,6 +29,13 @@ export default function Services() {
     rating: 4.5,
     reviews: 0
   });
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    if (type === 'success') {
+      setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 3000);
+    }
+  };
 
   // 3. ดึงข้อมูล services จาก Supabase
   useEffect(() => {
@@ -95,8 +104,11 @@ export default function Services() {
   };
 
   // ลบบริการ
-  const handleDelete = async (id) => {
-    if (!window.confirm("คุณต้องการลบบริการนี้ใช่หรือไม่?")) return;
+  const handleDelete = (id) => {
+    setConfirmDelete(id);
+  };
+
+  const executeDelete = async (id) => {
 
     try {
       const { error } = await supabase
@@ -107,10 +119,12 @@ export default function Services() {
       if (error) throw error;
 
       setServices(services.filter(s => s.id !== id));
-      alert("ลบบริการเรียบร้อยแล้ว");
+      showNotification("ลบบริการเรียบร้อยแล้ว");
     } catch (err) {
-      alert('Error deleting service: ' + err.message);
+      showNotification('ไม่สามารถลบบริการได้: ' + err.message, 'error');
       console.error('Error deleting service:', err);
+    } finally {
+      setConfirmDelete(null);
     }
   };
 
@@ -120,7 +134,7 @@ export default function Services() {
 
     // Validation
     if (!formData.name || !formData.price) {
-      alert("กรุณากรอกชื่อและราคา");
+      showNotification("กรุณากรอกชื่อและราคา", "error");
       return;
     }
 
@@ -149,7 +163,7 @@ export default function Services() {
         if (error) throw error;
 
         setServices(services.map(s => s.id === currentService.id ? data : s));
-        alert("แก้ไขข้อมูลเรียบร้อย");
+        showNotification("แก้ไขข้อมูลเรียบร้อย");
       } else {
         // Insert
         const { data, error } = await supabase
@@ -161,7 +175,7 @@ export default function Services() {
         if (error) throw error;
 
         setServices([data, ...services]);
-        alert("เพิ่มบริการใหม่เรียบร้อย");
+        showNotification("เพิ่มบริการใหม่เรียบร้อย");
       }
 
       setIsModalOpen(false);
@@ -176,11 +190,10 @@ export default function Services() {
         reviews: 0
       });
     } catch (err) {
-      console.error('Error saving service:', err);
       if (err.message?.includes('row-level security')) {
-        alert('❌ ข้อผิดพลาด RLS Policy:\nไม่สามารถบันทึกข้อมูลได้ เนื่องจากการตั้งค่า Row-Level Security ใน Supabase\n\n✅ วิธีแก้:\n1. ไปที่ Supabase Dashboard\n2. เลือกตาราง "services"\n3. ไปที่ RLS Policies\n4. ปิด RLS หรือสร้าง policy ที่อนุญาต INSERT/UPDATE');
+        showNotification('❌ ข้อผิดพลาด RLS Policy: ไม่สามารถบันทึกข้อมูลได้', 'error');
       } else {
-        alert('Error saving service: ' + err.message);
+        showNotification('เกิดข้อผิดพลาด: ' + err.message, 'error');
       }
     } finally {
       setSaving(false);
@@ -188,7 +201,46 @@ export default function Services() {
   };
 
   return (
-    <div className="space-y-6 animate-[fadeIn_0.5s_ease-out]">
+    <div className="space-y-6 animate-[fadeIn_0.5s_ease-out] relative">
+
+      {/* --- Notification Card --- */}
+      {notification.show && (
+        <div className="fixed top-24 right-6 z-100 animate-[slideLeft_0.3s_ease-out]">
+          <div className={`p-6 rounded-2xl shadow-2xl border flex items-center gap-4 backdrop-blur-xl ${notification.type === 'error'
+              ? 'bg-red-500/10 border-red-500/20 text-red-500'
+              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+            }`}>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${notification.type === 'error' ? 'bg-red-500/20' : 'bg-emerald-500/20'
+              }`}>
+              {notification.type === 'error' ? <X size={24} /> : <Check size={24} />}
+            </div>
+            <div>
+              <h4 className="font-bold text-lg">{notification.type === 'error' ? 'เกิดข้อผิดพลาด' : 'ทำรายการสำเร็จ'}</h4>
+              <p className="text-sm opacity-80">{notification.message}</p>
+            </div>
+            <button onClick={() => setNotification({ show: false, message: '', type: 'success' })} className="ml-4 opacity-50 hover:opacity-100">
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* --- Delete Confirmation Card (Modal) --- */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-1000 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-white/10 rounded-[2.5rem] p-10 max-w-sm w-full shadow-2xl animate-[slideUp_0.3s_ease-out] text-center">
+            <div className="w-20 h-20 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trash2 size={40} />
+            </div>
+            <h3 className="text-2xl font-serif font-bold text-white mb-2">ลบบริการ?</h3>
+            <p className="text-zinc-400 mb-8 leading-relaxed">ข้อมูลนี้จะถูกลบออกถาวร<br />คุณแน่ใจใช่หรือไม่?</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-4 bg-zinc-800 text-zinc-300 rounded-2xl font-bold hover:bg-zinc-700 transition-all">ยกเลิก</button>
+              <button onClick={() => executeDelete(confirmDelete)} className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-bold hover:bg-red-600 transition-all shadow-lg shadow-red-500/20">ลบทันที</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex justify-between items-center">

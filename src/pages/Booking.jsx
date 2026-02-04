@@ -42,7 +42,9 @@ export default function Booking() {
   const [bookedSlots, setBookedSlots] = useState([]);
   const [adminBusySlots, setAdminBusySlots] = useState([]);
   const [servicesPage, setServicesPage] = useState(1); // Pagination for services
-  const [skipLineStep, setSkipLineStep] = useState(false); // Toggle to skip LINE QR step
+  const [skipLineStep, setSkipLineStep] = useState(() => {
+    return localStorage.getItem('skipLineStep') === 'true';
+  }); // Toggle to skip LINE QR step
 
   // Fetch booked slots for the selected date
   const fetchBookedAndBusySlots = async () => {
@@ -709,6 +711,7 @@ export default function Booking() {
                       onClick={() => {
                         const nextVal = !skipLineStep;
                         setSkipLineStep(nextVal);
+                        localStorage.setItem('skipLineStep', nextVal);
                         // เปลี่ยนหน้าทันทีตามค่า Toggle
                         if (nextVal) {
                           setBookingStep('select');
