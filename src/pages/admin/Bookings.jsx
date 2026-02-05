@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useContext, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useContext, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom"; // 1. Import useNavigate
 import {
   Search,
@@ -23,6 +23,7 @@ import {
 } from "lucide-react"; // เพิ่ม ChevronLeft, ChevronRight, Scissors, Trash2
 import { supabase } from "../../supabase/client";
 import { AuthContext } from "../../context/AuthContext";
+import { io } from "socket.io-client";
 
 export default function Bookings() {
   const { user } = useContext(AuthContext);
@@ -313,19 +314,19 @@ export default function Bookings() {
       const mapped = bookingsData
         .filter((b) => !isRealtimeEvent || b.booking_date === selectedDate) // Filter to selected date if realtime
         .map((b) => ({
-        id: b.id,
-        customer:
-          (b.user_id === user?.id)
-            ? b.customer_name || "Walk-in"
-            : profilesMap[b.user_id]?.full_name || b.customer_name || (b.user_id ? String(b.user_id).slice(0, 8) + "…" : "-"),
-        service: b.service_name,
-        date: b.booking_date,
-        time: b.booking_time,
-        price: b.price,
-        status: b.status,
-        user_id: b.user_id,
-        applied_promo: b.applied_promo,
-      }));
+          id: b.id,
+          customer:
+            (b.user_id === user?.id)
+              ? b.customer_name || "Walk-in"
+              : profilesMap[b.user_id]?.full_name || b.customer_name || (b.user_id ? String(b.user_id).slice(0, 8) + "…" : "-"),
+          service: b.service_name,
+          date: b.booking_date,
+          time: b.booking_time,
+          price: b.price,
+          status: b.status,
+          user_id: b.user_id,
+          applied_promo: b.applied_promo,
+        }));
       setBookings(mapped);
       setLastUpdated(new Date());
     } catch (err) {
@@ -414,6 +415,39 @@ export default function Bookings() {
     };
   }, [fetchBookings]);
 
+  // --- Socket.io Realtime Setup ---
+  const socketRef = useRef(null);
+
+  useEffect(() => {
+    const socket = io("http://localhost:3001");
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("📡 Socket.io connected");
+      setRealtimeStatus("connected");
+    });
+
+    socket.on("bookingUpdate", () => {
+      console.log("🔄 Socket.io: Booking update received");
+      fetchBookings(true, true);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ Socket.io connection error:", err);
+      // Only set error if Supabase realtime is also failed
+      // For now let's just log it
+    });
+
+    socket.on("disconnect", () => {
+      console.log("📡 Socket.io disconnected");
+    });
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+  }, [fetchBookings]);
+
   // Separate effect to handle Walk-in modal date changes
   useEffect(() => {
     if (showWalkInModal && walkInForm.date !== selectedDate) {
@@ -439,6 +473,11 @@ export default function Bookings() {
           booking.id === id ? { ...booking, status: newStatus } : booking,
         ),
       );
+
+      // Notify others via WebSocket
+      if (socketRef.current) {
+        socketRef.current.emit("bookingUpdate");
+      }
     } catch (err) {
       console.error("Error updating status:", err);
       showNotification("ไม่สามารถอัปเดตสถานะได้", "error");
@@ -512,6 +551,11 @@ export default function Bookings() {
           },
           ...prev,
         ]);
+
+        // Notify others via WebSocket
+        if (socketRef.current) {
+          socketRef.current.emit("bookingUpdate");
+        }
       }
     } catch (err) {
       console.error("Error inserting walk-in booking:", err);
@@ -658,7 +702,7 @@ export default function Bookings() {
     const currentDate = new Date(selectedDate);
     const previousDate = new Date(currentDate);
     previousDate.setDate(previousDate.getDate() - 1);
-    
+
     // ไม่อนุญาตให้ไปวันที่ผ่านมาแล้ว
     const today = new Date().toLocaleDateString('en-CA');
     const previousDateStr = previousDate.toLocaleDateString('en-CA');
@@ -666,7 +710,7 @@ export default function Bookings() {
       showNotification("ไม่สามารถดูวันที่ผ่านมาแล้วได้ครับ", "warning");
       return;
     }
-    
+
     setSelectedDate(previousDateStr);
   };
 
@@ -791,13 +835,15 @@ export default function Bookings() {
       {/* Date Navigation & Date Picker */}
       <div className="bg-zinc-900 p-4 rounded-2xl border border-white/5 flex items-center justify-center gap-4 shadow-lg">
         {/* Date Navigation with Arrows + Date Picker */}
-        <button
-          onClick={handlePreviousDay}
-          className="p-3 bg-zinc-800 border border-white/10 rounded-xl hover:bg-zinc-700 hover:border-amber-500/50 text-zinc-300 hover:text-white transition-all active:scale-95"
-          title="วันก่อนหน้า"
-        >
-          <ChevronLeft size={24} />
-        </button>
+        {selectedDate > new Date().toLocaleDateString('en-CA') && (
+          <button
+            onClick={handlePreviousDay}
+            className="p-3 bg-zinc-800 border border-white/10 rounded-xl hover:bg-zinc-700 hover:border-amber-500/50 text-zinc-300 hover:text-white transition-all active:scale-95"
+            title="วันก่อนหน้า"
+          >
+            <ChevronLeft size={24} />
+          </button>
+        )}
 
         <div className="relative">
           <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 w-5 h-5 pointer-events-none" />
@@ -1227,10 +1273,10 @@ export default function Bookings() {
                       const now = new Date();
                       const todayStr = now.toLocaleDateString("en-CA");
                       const [curH, curM] = [now.getHours(), now.getMinutes()];
-                      const [slotH, slotM] = slot.split(":").map(Number);
+                      const slotWithGrace = addMinutesToTime(slot, 10);
                       const isPast =
                         rescheduleData.date === todayStr &&
-                        (slotH < curH || (slotH === curH && slotM <= curM));
+                        slotWithGrace < `${curH.toString().padStart(2, "0")}:${curM.toString().padStart(2, "0")}`;
 
                       const isDisabled = isBooked || isBusy || isPast;
 
@@ -1409,11 +1455,12 @@ export default function Bookings() {
                       );
                     });
 
-                    // Check if slot is in the past (for today)
+                    // Check if slot is in the past (for today) - Allow 10 minutes grace period
                     const now = new Date();
                     const todayDate = now.toLocaleDateString('en-CA');
                     const currentTimeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-                    const isPast = walkInForm.date === todayDate && slot < currentTimeStr;
+                    const slotWithGrace = addMinutesToTime(slot, 10);
+                    const isPast = walkInForm.date === todayDate && slotWithGrace < currentTimeStr;
 
                     // กำหนดสีและสถานะ
                     let statusStyles = "";

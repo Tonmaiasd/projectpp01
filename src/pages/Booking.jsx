@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/client';
 import { AuthContext } from '../context/AuthContext';
+import { io } from "socket.io-client";
 import Pagination from '../components/Pagination';
 import {
   Search, SlidersHorizontal, Star, Clock,
@@ -472,6 +473,11 @@ export default function Booking() {
         }),
       }).catch(err => console.warn('LINE Notify background error:', err));
 
+      // --- SOCKET.IO REALTIME NOTIFICATION ---
+      const socket = io("http://localhost:3001");
+      socket.emit("bookingUpdate");
+      setTimeout(() => socket.disconnect(), 1000);
+
       setBookingStep('success');
     } catch (error) {
       showNotification('Error creating booking: ' + error.message, "error");
@@ -484,6 +490,7 @@ export default function Booking() {
   // เมื่อผู้ใช้กด "จองเสร็จสิ้น" ปิด Modal (แจ้งเตือนถูกส่งไปแล้วตอนกด ยืนยันการจอง)
   const handleFinishBooking = () => {
     closeAll();
+    navigate('/profile');
   };
 
   // Auto-deselect promotion if booking date changes to be after promotion expiry

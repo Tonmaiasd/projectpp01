@@ -3,6 +3,8 @@ import cors from 'cors';
 import axios from 'axios';
 import dotenv from 'dotenv'; // Import dotenv
 import { createClient } from '@supabase/supabase-js'; // Added missing import
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 
 dotenv.config(); // Load environment variables from .env file
 
@@ -11,6 +13,34 @@ const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('📡 Socket.io: User connected', socket.id);
+
+  // Listen for update events from any client (e.g., User Booking page)
+  socket.on('bookingUpdate', () => {
+    console.log('🔄 Socket.io: Received bookingUpdate from client, broadcasting...');
+    notifyBookingUpdate(); // Broadcast to everyone
+  });
+
+  socket.on('disconnect', () => {
+    console.log('📡 Socket.io: User disconnected');
+  });
+});
+
+// Helper to notify all clients to refresh bookings
+const notifyBookingUpdate = () => {
+  console.log('📢 Socket.io: Emitting bookingUpdate');
+  io.emit('bookingUpdate');
+};
 
 // --- AUTO NOTIFICATION TRACKING ---
 const notifiedBookings = new Set();
@@ -85,6 +115,7 @@ app.post('/api/line/notify', async (req, res) => {
     });
 
     res.json({ success: true, message: 'Notification sent' });
+    notifyBookingUpdate();
   } catch (err) {
     console.error('Error in /api/line/notify:', err.response?.data || err.message);
     res.status(500).json({ error: 'Failed to send notification' });
@@ -231,6 +262,7 @@ app.post('/api/cancel-time-range-bookings', async (req, res) => {
     }
 
     res.json({ success: true, message: `ยกเลิกและแจ้งเตือนเรียบร้อยแล้ว ${successCount} รายการ`, count: successCount });
+    notifyBookingUpdate();
   } catch (err) {
     console.error('Error in /api/cancel-time-range-bookings:', err.message);
     res.status(500).json({ error: 'Failed to process cancellation: ' + err.message });
@@ -312,6 +344,7 @@ app.post('/api/cancel-full-day-bookings', async (req, res) => {
       message: `ยกเลิกคิววันที่ ${formattedDate} และแจ้งเตือนเรียบร้อยแล้ว ${successCount} รายการ`,
       count: successCount
     });
+    notifyBookingUpdate();
 
   } catch (err) {
     console.error('Error in /api/cancel-full-day-bookings:', err.message);
@@ -398,6 +431,7 @@ app.post('/api/cancel-multi-day-bookings', async (req, res) => {
       message: `บันทึกวันหยุดเรียบร้อยแล้ว (${dates.length} วัน) และยกเลิกคิวรวม ${totalCancelled} รายการ`,
       count: totalCancelled
     });
+    notifyBookingUpdate();
   } catch (err) {
     console.error('Error in /api/cancel-multi-day-bookings:', err.message);
     res.status(500).json({ error: 'Failed to process multi-day cancellation: ' + err.message });
@@ -477,6 +511,7 @@ app.post('/api/reschedule-booking', async (req, res) => {
     await sendLineNotification(supabaseAdmin, booking, msg);
 
     res.json({ success: true, message: 'เลื่อนคิวจองและแจ้งเตือนเรียบร้อยแล้ว' });
+    notifyBookingUpdate();
   } catch (err) {
     console.error('Error in /api/reschedule-booking:', err.message);
     res.status(500).json({ error: 'Failed to reschedule booking: ' + err.message });
@@ -519,6 +554,7 @@ app.post('/api/admin-reschedule-booking', async (req, res) => {
     await sendLineNotification(supabaseAdmin, booking, msg);
 
     res.json({ success: true, message: 'Admin เลื่อนคิวและแจ้งเตือนเรียบร้อยแล้ว' });
+    notifyBookingUpdate();
   } catch (err) {
     console.error('Error in /api/admin-reschedule-booking:', err.message);
     res.status(500).json({ error: 'Failed to reschedule booking: ' + err.message });
@@ -555,6 +591,7 @@ app.post('/api/cancel-booking', async (req, res) => {
     await sendLineNotification(supabaseAdmin, booking, msg);
 
     res.json({ success: true, message: 'ยกเลิกการจองเรียบร้อยแล้ว' });
+    notifyBookingUpdate();
   } catch (err) {
     console.error('Error in /api/cancel-booking:', err.message);
     res.status(500).json({ error: 'Failed to cancel booking: ' + err.message });
@@ -609,6 +646,7 @@ app.post('/api/user-update-booking', async (req, res) => {
     await sendLineNotification(supabaseAdmin, booking, msg);
 
     res.json({ success: true, message: 'แก้ไขข้อมูลการจองและแจ้งเตือนเรียบร้อยแล้ว' });
+    notifyBookingUpdate();
   } catch (err) {
     console.error('Error in /api/user-update-booking:', err.message);
     res.status(500).json({ error: 'Failed to update booking: ' + err.message });
@@ -898,9 +936,36 @@ app.get('/', (_req, res) => {
   res.send('LINE messaging API server running');
 });
 
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`LINE messaging server listening on http://localhost:${PORT}`);
-  // Start the auto-notification loop
+
+  // Bridge Supabase Realtime to Socket.io
+  // This ensures that even changes made directly to Supabase (e.g. from the client)
+  // are broadcasted via our Socket.io websocket.
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    supabaseAdmin
+      .channel('server-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bookings' },
+        (payload) => {
+          console.log('🔄 DB Change detected on server:', payload.eventType);
+          notifyBookingUpdate();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'admin_busy_times' },
+        () => notifyBookingUpdate()
+      )
+      .subscribe((status) => {
+        console.log(`📡 Server-side Supabase Realtime Status: ${status}`);
+      });
+  }
+
   // Start the auto-notification and cleanup loop
   setInterval(() => {
     // runAutoNotificationCheck();
