@@ -116,6 +116,7 @@ export default function Bookings() {
 
   const [bookings, setBookings] = useState([]);
   const [services, setServices] = useState([]);
+  const [promotions, setPromotions] = useState([]); // Added state for promotions
   const [adminBusySlots, setAdminBusySlots] = useState([]); // Added state for admin busy times
 
   // Helper สำหรับเปรียบเทียบเวลา (HH:mm)
@@ -157,6 +158,83 @@ export default function Bookings() {
   });
   const [rescheduleBookedSlots, setRescheduleBookedSlots] = useState([]);
   const [rescheduleAdminBusySlots, setRescheduleAdminBusySlots] = useState([]);
+
+  // --- Edit Booking Logic (New) ---
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [isEditLoading, setIsEditLoading] = useState(false);
+  const [editBookingData, setEditBookingData] = useState({
+    id: null,
+    service_name: "",
+    applied_promo: "",
+    price: 0,
+    original_price: 0
+  });
+
+  const handleEdit = (bookingId) => {
+    const booking = bookings.find((b) => b.id === bookingId);
+    if (!booking) return;
+
+    const originalService = services.find(s => s.name === booking.service);
+    const originalPrice = originalService ? originalService.price : booking.price;
+
+    setEditBookingData({
+      id: booking.id,
+      service_name: booking.service,
+      applied_promo: booking.applied_promo || "",
+      price: booking.price,
+      original_price: originalPrice
+    });
+    setShowEditModal(true);
+  };
+
+  const calculateEditPrice = (serviceName, promoCode) => {
+    const service = services.find(s => s.name === serviceName);
+    if (!service) return 0;
+
+    let price = service.price;
+    const promo = promotions.find(p => p.code === promoCode);
+
+    if (promo) {
+      const discountText = promo.discount_text || '';
+      let discount = 0;
+
+      if (discountText.includes('%')) {
+        const percent = parseInt(discountText.replace(/[^0-9]/g, ''));
+        discount = (price * percent) / 100;
+      } else {
+        discount = parseInt(discountText.replace(/[^0-9]/g, ''));
+      }
+      price = Math.max(0, price - discount);
+    }
+
+    return price;
+  };
+
+  const handleEditSubmit = async (e) => {
+    if (e) e.preventDefault();
+    setIsEditLoading(true);
+    try {
+      const { error } = await supabase
+        .from("bookings")
+        .update({
+          service_name: editBookingData.service_name,
+          applied_promo: editBookingData.applied_promo || null,
+          price: editBookingData.price
+        })
+        .eq("id", editBookingData.id);
+
+      if (error) throw error;
+
+      showNotification("แก้ไขข้อมูลเรียบร้อยแล้ว", "success");
+      setShowEditModal(false);
+      fetchBookings();
+    } catch (err) {
+      console.error("Error updating booking:", err);
+      showNotification("ไม่สามารถแก้ไขข้อมูลได้", "error");
+    } finally {
+      setIsEditLoading(false);
+    }
+  };
 
   // Open Reschedule Modal
   const handleReschedule = (bookingId) => {
@@ -356,10 +434,30 @@ export default function Bookings() {
     }
   }, []);
 
+  const fetchPromotions = useCallback(async () => {
+    if (!supabase) return;
+    try {
+      const { data, error } = await supabase
+        .from("promotions")
+        .select("*")
+        .eq("active", true)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching promotions:", error);
+      } else {
+        setPromotions(data || []);
+      }
+    } catch (err) {
+      console.error("Error fetching promotions:", err);
+    }
+  }, []);
+
   useEffect(() => {
     fetchBookings();
     fetchServices();
-  }, [selectedDate, realtimeStatus]);
+    fetchPromotions();
+  }, [selectedDate, realtimeStatus, fetchBookings, fetchServices, fetchPromotions]);
 
   // เมื่อโหลดข้อมูลเรียบร้อย หรือเปลี่ยนวัน ให้พยายามเลือกเวลาปัจจุบัน (หรือเวลาแรก) เป็นค่าเริ่มต้น
   useEffect(() => {
@@ -905,7 +1003,7 @@ export default function Bookings() {
                 const currentT = normalize(time);
                 return (
                   currentT >= normalize(busy.start_time) &&
-                  currentT < normalize(busy.end_time)
+                  currentT <= normalize(busy.end_time)
                 );
               });
 
@@ -915,15 +1013,15 @@ export default function Bookings() {
               if (isSelected) {
                 statusStyles =
                   "bg-amber-500 border-amber-400 text-black shadow-[0_0_12px_rgba(245,158,11,0.25)] z-10";
+              } else if (isBusy) {
+                statusStyles = "bg-red-500/10 border-red-500/20 text-red-500";
               } else if (isBooked) {
-                // Prioritize Booking status over Busy status
                 switch (status) {
                   case "Completed":
                     statusStyles =
                       "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 hover:border-emerald-500/50";
                     break;
                   case "Cancelled":
-                    // Don't show cancelled bookings - treat as available
                     statusStyles =
                       "bg-zinc-950/50 border-white/5 text-zinc-500 hover:border-white/20";
                     break;
@@ -932,8 +1030,6 @@ export default function Bookings() {
                       "bg-amber-400/10 border-amber-400/20 text-amber-400 hover:border-amber-400/40";
                     break;
                 }
-              } else if (isBusy) {
-                statusStyles = "bg-red-500/10 border-red-500/20 text-red-500";
               } else {
                 statusStyles =
                   "bg-zinc-950/50 border-white/5 text-zinc-500 hover:border-white/20";
@@ -981,10 +1077,12 @@ export default function Bookings() {
               <span className="text-zinc-400">มีคนจอง / Booked</span>
             </div>
             <div className="flex items-center gap-3 text-sm font-bold">
-              <div className="w-5 h-5 rounded-md bg-zinc-800 border border-white/10 relative flex items-center justify-center">
-                <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
-              </div>
+              <div className="w-5 h-5 rounded-md bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]" />
               <span className="text-zinc-400">เสร็จสิ้น / Completed</span>
+            </div>
+            <div className="flex items-center gap-3 text-sm font-bold mt-1">
+              <div className="w-5 h-5 rounded-md bg-red-500/20 border border-red-500/40 shadow-[0_0_5px_rgba(239,68,68,0.2)]" />
+              <span className="text-red-400/80">สีแดงคือ ประกาศว่าร้านไม่ว่างและจะแจ้งเตือนไปยัง LINE ลูกค้า</span>
             </div>
           </div>
         </div>
@@ -1093,8 +1191,22 @@ export default function Bookings() {
                             </div>
                           </div>
 
-                          {/* 2x2 Action Buttons (Right-ish but bottom here for layout) */}
-                          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 xl:grid-cols-4 gap-2 mt-1">
+                          {/* Action Buttons Grid */}
+                          <div className="grid grid-cols-2 sm:grid-cols-5 lg:grid-cols-2 xl:grid-cols-5 gap-2 mt-1">
+                            <button
+                              onClick={() => handleEdit(booking.id)}
+                              disabled={booking.status === "Cancelled" || booking.status === "Completed"}
+                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${booking.status !== "Cancelled" && booking.status !== "Completed"
+                                ? "bg-amber-500/5 border-amber-500/20 text-amber-500 hover:bg-amber-500 hover:text-black shadow-xl hover:shadow-amber-500/20"
+                                : "bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed"
+                                }`}
+                            >
+                              <Scissors size={24} />
+                              <span className="text-[9px] font-black uppercase tracking-widest">
+                                แก้ไข
+                              </span>
+                            </button>
+
                             <button
                               onClick={() => handleNotifyBooking(booking.id)}
                               disabled={booking.status !== "Pending" || !canMarkCompleted}
@@ -1334,6 +1446,109 @@ export default function Bookings() {
           </div>
         </div>
       )}
+      {/* --- Edit Booking Modal (Admin) --- */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
+          <div className="bg-zinc-900 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out]">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-serif font-bold text-white flex items-center gap-3">
+                <Scissors className="text-amber-500" size={24} />{" "}
+                แก้ไขข้อมูลการจอง
+              </h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-zinc-500 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-6">
+              {/* Service Selection */}
+              <div>
+                <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
+                  <Scissors size={16} className="inline mr-2" /> เลือกทรงผม/บริการใหม่
+                </label>
+                <select
+                  required
+                  value={editBookingData.service_name}
+                  onChange={(e) => {
+                    const newService = e.target.value;
+                    const newPrice = calculateEditPrice(newService, editBookingData.applied_promo);
+                    setEditBookingData({
+                      ...editBookingData,
+                      service_name: newService,
+                      price: newPrice
+                    });
+                  }}
+                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-5 py-3 text-white focus:border-amber-500 outline-none appearance-none cursor-pointer"
+                >
+                  {services.map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name} (฿{s.price})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Promotion Selection */}
+              <div>
+                <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
+                  <Sparkles size={16} className="inline mr-2" /> เลือกโปรโมชั่น
+                </label>
+                <select
+                  value={editBookingData.applied_promo}
+                  onChange={(e) => {
+                    const newPromo = e.target.value;
+                    const newPrice = calculateEditPrice(editBookingData.service_name, newPromo);
+                    setEditBookingData({
+                      ...editBookingData,
+                      applied_promo: newPromo,
+                      price: newPrice
+                    });
+                  }}
+                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-5 py-3 text-white focus:border-amber-500 outline-none appearance-none cursor-pointer"
+                >
+                  <option value="">-- ไม่ใช้โปรโมชั่น --</option>
+                  {promotions.map((p) => (
+                    <option key={p.id} value={p.code}>
+                      {p.name} ({p.discount_text})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Price Display */}
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex justify-between items-center">
+                <span className="text-zinc-400 font-bold">ราคาสุทธิ</span>
+                <span className="text-2xl font-black text-amber-500 font-num">฿{editBookingData.price}</span>
+              </div>
+
+              {/* Footer Buttons */}
+              <div className="pt-4 flex gap-4">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="submit"
+                  disabled={isEditLoading}
+                  className="flex-1 py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2"
+                >
+                  {isEditLoading ? (
+                    <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
+                  ) : (
+                    <>บันทึกการแก้ไข</>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* --- Walk-in Modal --- */}
       {showWalkInModal && (
@@ -1451,7 +1666,7 @@ export default function Bookings() {
                       const currentT = normalize(slot);
                       return (
                         currentT >= normalize(busy.start_time) &&
-                        currentT < normalize(busy.end_time)
+                        currentT <= normalize(busy.end_time)
                       );
                     });
 

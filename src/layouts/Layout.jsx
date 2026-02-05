@@ -8,7 +8,7 @@ export default function Layout() {
   return (
     // เปลี่ยนพื้นหลังหลักเป็นสีเข้ม (zinc-950)
     <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100 font-sans">
-      
+
       {/* Global Font Styles for the layout */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Manrope:wght@300;400;500;600&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap');
@@ -38,13 +38,13 @@ export default function Layout() {
                 ร้านตัดผมชายที่ให้ความสำคัญกับสไตล์และคุณภาพ เราพร้อมดูแลบุคลิกภาพของคุณให้ดูดีที่สุด ในบรรยากาศที่เป็นกันเอง
               </p>
               <div className="flex gap-4">
-                <a 
-                  href="https://www.facebook.com/p/%E0%B8%AB%E0%B8%A5%E0%B9%88%E0%B8%AD%E0%B9%80%E0%B8%A5%E0%B8%A2-%E0%B8%84%E0%B8%B1%E0%B8%97%E0%B8%8B%E0%B9%8C-100063526962016/" 
-                  target="_blank" 
-                  rel="noreferrer" 
+                <a
+                  href="https://www.facebook.com/p/%E0%B8%AB%E0%B8%A5%E0%B9%88%E0%B8%AD%E0%B9%80%E0%B8%A5%E0%B8%A2-%E0%B8%84%E0%B8%B1%E0%B8%97%E0%B8%8B%E0%B9%8C-100063526962016/"
+                  target="_blank"
+                  rel="noreferrer"
                   className="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center text-zinc-400 hover:bg-blue-600 hover:text-white transition-all"
                 >
-                  <Facebook size={20}/>
+                  <Facebook size={20} />
                 </a>
               </div>
             </div>
@@ -61,8 +61,7 @@ export default function Layout() {
                   </button>
                 </li>
                 <li>
-                   {/* ลิงก์ไปยังส่วนโปรโมชั่นหน้าแรก */}
-                  <a href="/#Promotions" className="hover:text-amber-500 transition-colors">โปรโมชั่น</a>
+                  {/* ลิงก์ไปยังส่วนโปรโมชั่นหน้าแรก */}
                 </li>
               </ul>
             </div>
@@ -70,10 +69,10 @@ export default function Layout() {
               <h4 className="text-white font-bold uppercase tracking-widest mb-6 text-sm">ติดต่อ</h4>
               <ul className="space-y-3 text-zinc-400 text-sm">
                 <li className="flex items-center gap-2">
-                  <Phone size={14} className="text-amber-500"/> 092-268-9270
+                  <Phone size={14} className="text-amber-500" /> 092-268-9270
                 </li>
                 <li className="flex items-start gap-2">
-                  <MapPin size={14} className="text-amber-500 mt-1"/> ถนนเทศบาลสงเคราะห์, สกลนคร
+                  <MapPin size={14} className="text-amber-500 mt-1" /> ถนนเทศบาลสงเคราะห์, สกลนคร
                 </li>
                 <li className="flex items-center gap-2 text-green-500">
                   <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> เปิดให้บริการ

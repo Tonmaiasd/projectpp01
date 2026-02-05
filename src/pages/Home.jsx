@@ -226,7 +226,7 @@ export default function Home() {
                 ดูบริการของเรา
               </button>
               <a href="#contact" className="px-10 py-5 text-lg border-2 border-amber-500/50 text-white font-bold tracking-widest hover:bg-amber-500/10 hover:border-amber-500 transition-all flex items-center justify-center gap-3 group rounded-lg">
-                ติดต่อจองคิว <ChevronRight size={20} className="group-hover:translate-x-2 transition-transform" />
+                ติดต่อจองคิว Walk-in <ChevronRight size={20} className="group-hover:translate-x-2 transition-transform" />
               </a>
             </div>
           </div>
@@ -420,8 +420,8 @@ export default function Home() {
             <button
               onClick={() => setFilterStar(0)}
               className={`px-6 py-2.5 rounded-full border-2 transition-all font-medium ${filterStar === 0
-                  ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/30"
-                  : "border-amber-500/20 text-zinc-300 hover:border-amber-500/50 hover:bg-amber-500/5"
+                ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/30"
+                : "border-amber-500/20 text-zinc-300 hover:border-amber-500/50 hover:bg-amber-500/5"
                 }`}
             >
               ทั้งหมด
@@ -431,8 +431,8 @@ export default function Home() {
                 key={s}
                 onClick={() => setFilterStar(s)}
                 className={`px-6 py-2.5 rounded-full border-2 flex items-center gap-2 transition-all font-medium ${filterStar === s
-                    ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/30"
-                    : "border-amber-500/20 text-zinc-300 hover:border-amber-500/50 hover:bg-amber-500/5"
+                  ? "bg-amber-500 text-black border-amber-500 shadow-lg shadow-amber-500/30"
+                  : "border-amber-500/20 text-zinc-300 hover:border-amber-500/50 hover:bg-amber-500/5"
                   }`}
               >
                 {s} <Star size={14} className={filterStar === s ? "fill-black" : "fill-amber-500"} />
@@ -534,7 +534,7 @@ export default function Home() {
                     <div className="w-16 h-16 bg-linear-to-br from-amber-500/20 to-amber-600/10 rounded-2xl flex items-center justify-center text-amber-500 shrink-0 group-hover:from-amber-500/40 transition-colors"><Clock size={28} /></div>
                     <div>
                       <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mb-2">เวลาเปิด - ปิด</p>
-                      <p className="text-white text-lg font-light">เปิดบริการทุกวัน <span className="text-amber-400 font-semibold ml-2">12:00 - 21:00 น.</span></p>
+                      <p className="text-white text-lg font-light">เปิดบริการทุกวัน <span className="text-amber-400 font-semibold ml-2">09:00 - 20:00 น.</span></p>
                     </div>
                   </div>
                 </div>

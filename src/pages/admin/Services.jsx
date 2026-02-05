@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit3, Trash2, Clock, DollarSign, X, Check, Save, Loader2 } from 'lucide-react';
 import { supabase } from '../../supabase/client';
 import Pagination from '../../components/Pagination';
+import { io } from "socket.io-client";
 
 export default function Services() {
 
@@ -22,12 +23,11 @@ export default function Services() {
   const [formData, setFormData] = useState({
     name: '',
     price: '',
-    duration_minutes: '',
+    duration_minutes: '30',
     category: '',
     img_url: '',
     description: '',
-    rating: 4.5,
-    reviews: 0
+    rating: 4.5
   });
 
   const showNotification = (message, type = 'success') => {
@@ -77,12 +77,11 @@ export default function Services() {
     setFormData({
       name: '',
       price: '',
-      duration_minutes: '',
+      duration_minutes: '30',
       category: '',
       img_url: '',
       description: '',
-      rating: 4.5,
-      reviews: 0
+      rating: 4.5
     });
     setIsModalOpen(true);
   };
@@ -93,12 +92,11 @@ export default function Services() {
     setFormData({
       name: service.name || '',
       price: service.price || '',
-      duration_minutes: service.duration_minutes || '',
+      duration_minutes: '30',
       category: service.category || '',
       img_url: service.img_url || '',
       description: service.description || '',
-      rating: service.rating || 4.5,
-      reviews: service.reviews || 0
+      rating: service.rating || 4.5
     });
     setIsModalOpen(true);
   };
@@ -125,6 +123,11 @@ export default function Services() {
       console.error('Error deleting service:', err);
     } finally {
       setConfirmDelete(null);
+
+      // --- SOCKET.IO REALTIME NOTIFICATION ---
+      const socket = io("http://localhost:3001");
+      socket.emit("servicesUpdate");
+      setTimeout(() => socket.disconnect(), 1000);
     }
   };
 
@@ -147,8 +150,7 @@ export default function Services() {
         category: formData.category || null,
         img_url: formData.img_url || null,
         description: formData.description || null,
-        rating: Number(formData.rating) || null,
-        reviews: Number(formData.reviews) || null
+        rating: Number(formData.rating) || null
       };
 
       if (currentService) {
@@ -179,15 +181,20 @@ export default function Services() {
       }
 
       setIsModalOpen(false);
+
+      // --- SOCKET.IO REALTIME NOTIFICATION ---
+      const socket = io("http://localhost:3001");
+      socket.emit("servicesUpdate");
+      setTimeout(() => socket.disconnect(), 1000);
+
       setFormData({
         name: '',
         price: '',
-        duration_minutes: '',
+        duration_minutes: '30',
         category: '',
         img_url: '',
         description: '',
-        rating: 4.5,
-        reviews: 0
+        rating: 4.5
       });
     } catch (err) {
       if (err.message?.includes('row-level security')) {
@@ -207,8 +214,8 @@ export default function Services() {
       {notification.show && (
         <div className="fixed top-24 right-6 z-100 animate-[slideLeft_0.3s_ease-out]">
           <div className={`p-6 rounded-2xl shadow-2xl border flex items-center gap-4 backdrop-blur-xl ${notification.type === 'error'
-              ? 'bg-red-500/10 border-red-500/20 text-red-500'
-              : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+            ? 'bg-red-500/10 border-red-500/20 text-red-500'
+            : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
             }`}>
             <div className={`w-12 h-12 rounded-full flex items-center justify-center ${notification.type === 'error' ? 'bg-red-500/20' : 'bg-emerald-500/20'
               }`}>
@@ -371,10 +378,12 @@ export default function Services() {
                   <input
                     type="number"
                     required
+                    readOnly
                     value={formData.duration_minutes}
                     onChange={e => setFormData({ ...formData, duration_minutes: e.target.value })}
                     placeholder="30"
-                    className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none font-num"
+                    className="w-full bg-zinc-800 border border-white/10 rounded-xl px-4 py-2.5 text-zinc-400 focus:border-amber-500 outline-none font-num cursor-not-allowed"
+                    title="ระยะเวลาถูกกำหนดไว้ที่ 30 นาที"
                   />
                 </div>
               </div>
@@ -418,7 +427,7 @@ export default function Services() {
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="text-sm text-zinc-400 mb-1 block">คะแนน (0-5)</label>
                   <input
@@ -429,17 +438,6 @@ export default function Services() {
                     value={formData.rating}
                     onChange={e => setFormData({ ...formData, rating: e.target.value })}
                     placeholder="4.5"
-                    className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none font-num"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-zinc-400 mb-1 block">จำนวนรีวิว</label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.reviews}
-                    onChange={e => setFormData({ ...formData, reviews: e.target.value })}
-                    placeholder="0"
                     className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none font-num"
                   />
                 </div>

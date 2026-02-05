@@ -185,6 +185,18 @@ export default function Booking() {
     };
 
     fetchInitialData();
+
+    // --- SOCKET.IO REALTIME NOTIFICATION ---
+    const socket = io("http://localhost:3001");
+    socket.on("servicesUpdate", () => {
+      console.log('✨ Socket.io: Received servicesUpdate, fetching updated services...');
+      fetchServices();
+    });
+
+    return () => {
+      socket.off("servicesUpdate");
+      socket.disconnect();
+    };
   }, []);
 
   const fetchPromotions = async () => {
@@ -197,7 +209,7 @@ export default function Booking() {
 
       if (error) throw error;
 
-      // Filter out expired promotions (Client-side double check)
+      // Filter out expired promotions (Client-side double check
       const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
       const validPromotions = (data || []).filter(p => !p.expire_date || p.expire_date >= todayStr);
 
@@ -842,7 +854,7 @@ export default function Booking() {
                               className={`py-2.5 rounded-xl text-sm font-num font-bold transition-all border ${bookingData.time === slot
                                 ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] scale-105'
                                 : (isAdminBusy || isBooked)
-                                  ? 'bg-zinc-800/50 text-zinc-600 border-white/5 cursor-not-allowed opacity-40'
+                                  ? 'bg-red-500/10 text-red-500/80 border-red-500/20 cursor-not-allowed'
                                   : isPast
                                     ? 'bg-orange-500/10 text-orange-500 border-orange-500/20 cursor-not-allowed opacity-60'
                                     : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'

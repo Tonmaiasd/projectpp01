@@ -31,6 +31,11 @@ io.on('connection', (socket) => {
     notifyBookingUpdate(); // Broadcast to everyone
   });
 
+  socket.on('servicesUpdate', () => {
+    console.log('🔄 Socket.io: Received servicesUpdate from client, broadcasting...');
+    notifyServicesUpdate(); // Broadcast to everyone
+  });
+
   socket.on('disconnect', () => {
     console.log('📡 Socket.io: User disconnected');
   });
@@ -40,6 +45,12 @@ io.on('connection', (socket) => {
 const notifyBookingUpdate = () => {
   console.log('📢 Socket.io: Emitting bookingUpdate');
   io.emit('bookingUpdate');
+};
+
+// Helper to notify all clients to refresh services
+const notifyServicesUpdate = () => {
+  console.log('📢 Socket.io: Emitting servicesUpdate');
+  io.emit('servicesUpdate');
 };
 
 // --- AUTO NOTIFICATION TRACKING ---
@@ -1053,19 +1064,31 @@ const runOverdueBookingCleanup = async () => {
     // Get current date in Thailand (GMT+7)
     const nowLocal = new Date(new Date().getTime() + (7 * 60 * 60 * 1000));
     const todayStr = nowLocal.toISOString().split('T')[0];
+    const currentHour = nowLocal.getUTCHours();
+    console.log(`[Cleanup Check] Current Hour (TH): ${currentHour}, Today: ${todayStr}`);
 
-    // Find Pending bookings from PREVIOUS days (booking_date < today)
-    // Only notify Pending bookings, not Confirmed or other statuses
-    const { data: bookings, error } = await supabaseAdmin
+    // If it's 9 PM (21:00) or later, we cancel today's pending bookings.
+    // Otherwise, we only cancel bookings from previous days.
+    let query = supabaseAdmin
       .from('bookings')
       .select('*')
-      .lt('booking_date', todayStr)
       .eq('status', 'Pending');
+
+    if (currentHour >= 21) {
+      // After 9 PM, cancel everything up to and including today
+      query = query.lte('booking_date', todayStr);
+    } else {
+      // Before 9 PM, only cancel previous days
+      query = query.lt('booking_date', todayStr);
+    }
+
+    const { data: bookings, error } = await query;
 
     if (error || !bookings) return;
 
     for (const b of bookings) {
-      console.log(`[Cleanup] Cancelling overdue booking #${b.id} (${b.customer_name}) - Date: ${b.booking_date} (Overdue by 1 day+)`);
+      const isToday = b.booking_date === todayStr;
+      console.log(`[Cleanup] Cancelling ${isToday ? 'today\'s unfinished' : 'overdue'} booking #${b.id} (${b.customer_name}) - Date: ${b.booking_date}`);
 
       // 1. Update status to Cancelled
       const { error: updateError } = await supabaseAdmin
@@ -1080,7 +1103,7 @@ const runOverdueBookingCleanup = async () => {
 
       // 2. Notify User via LINE
       const formattedDate = new Date(b.booking_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
-      const msg = `❌ ระบบยกเลิกคิวอัตโนมัติ\n\nเรียนคุณ ${b.customer_name}\nเนื่องจากเลยเวลานัดเดิมของคุณเมื่อวันที่ ${formattedDate} และเลยกำหนดมาแล้ว 1 วัน ระบบจึงขออนุญาตยกเลิกคิวของคุณโดยอัตโนมัติครับ 🙏\n\nหากต้องการใช้บริการ รบกวนทำการจองใหม่ในภายหลังครับ ✨`;
+      const msg = `❌ ระบบยกเลิกคิวอัตโนมัติ\n\nเรียนคุณ ${b.customer_name}\nเนื่องจากขณะนี้เลยเวลา 21:00 น. ของวันที่ ${formattedDate} และลูกค้าไม่มาใช้บริการของเรา ระบบจึงขออนุญาตยกเลิกคิวอัตโนมัติครับ 🙏\n\nหากต้องการใช้บริการ รบกวนทำการจองใหม่ในภายหลังครับ ✨`;
 
       try {
         await sendLineNotification(supabaseAdmin, b, msg);

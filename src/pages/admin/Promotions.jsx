@@ -62,7 +62,18 @@ export default function Promotions() {
   }, [promotions, promotionsPage]);
 
   // Toggle Active Status
-  const handleToggleActive = async (id, active) => {
+  const handleToggleActive = async (id, active, expireDate) => {
+    // Check if trying to activate an expired promotion
+    if (!active && expireDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expDate = new Date(expireDate);
+      if (expDate < today) {
+        showNotification('โปรโมชั่นหมดอายุแล้ว กรุณาแก้ไขวันหมดอายุก่อนเปิดใช้งาน', 'warning');
+        return;
+      }
+    }
+
     try {
       const { data, error } = await supabase
         .from('promotions')
@@ -72,6 +83,7 @@ export default function Promotions() {
         .single();
       if (error) throw error;
       setPromotions((prev) => prev.map(p => p.id === id ? data : p));
+      showNotification(active ? 'ปิดใช้งานโปรโมชั่นแล้ว' : 'เปิดใช้งานโปรโมชั่นแล้ว', 'success');
     } catch (err) {
       showNotification('ไม่สามารถเปลี่ยนสถานะได้: ' + err.message, 'error');
     }
@@ -126,6 +138,17 @@ export default function Promotions() {
       return;
     }
 
+    // Check if trying to save an active promotion with an expired date
+    if (formData.active && formData.expire_date) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expDate = new Date(formData.expire_date);
+      if (expDate < today) {
+        showNotification('วันหมดอายุต้องไม่เป็นอดีตเมื่อเปิดใช้งานโปรโมชั่น', 'warning');
+        return;
+      }
+    }
+
     try {
       if (currentPromo) {
         const { data, error } = await supabase
@@ -172,12 +195,12 @@ export default function Promotions() {
       {/* Notification Card */}
       {notification && (
         <div className={`p-4 rounded-xl border animate-in fade-in slide-in-from-top-2 duration-300 flex items-center gap-3 ${notification.type === 'success'
-            ? 'bg-green-500/10 border-green-500/30 text-green-400'
-            : notification.type === 'error'
-              ? 'bg-red-500/10 border-red-500/30 text-red-400'
-              : notification.type === 'warning'
-                ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
-                : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
+          ? 'bg-green-500/10 border-green-500/30 text-green-400'
+          : notification.type === 'error'
+            ? 'bg-red-500/10 border-red-500/30 text-red-400'
+            : notification.type === 'warning'
+              ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+              : 'bg-blue-500/10 border-blue-500/30 text-blue-400'
           }`}>
           <div className="text-xl">
             {notification.type === 'success' && '✓'}
@@ -239,7 +262,7 @@ export default function Promotions() {
 
                 {/* Toggle Switch */}
                 <button
-                  onClick={() => handleToggleActive(promo.id, promo.active)}
+                  onClick={() => handleToggleActive(promo.id, promo.active, promo.expire_date)}
                   title={promo.active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                   className={`text-3xl transition-transform hover:scale-110 active:scale-95 ${promo.active ? 'text-green-500 hover:text-green-400' : 'text-zinc-600 hover:text-zinc-500'}`}
                 >
