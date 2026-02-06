@@ -92,7 +92,7 @@ export default function Services() {
     setFormData({
       name: service.name || '',
       price: service.price || '',
-      duration_minutes: '30',
+      duration_minutes: service.duration_minutes || '30',
       category: service.category || '',
       img_url: service.img_url || '',
       description: service.description || '',
@@ -378,12 +378,10 @@ export default function Services() {
                   <input
                     type="number"
                     required
-                    readOnly
                     value={formData.duration_minutes}
                     onChange={e => setFormData({ ...formData, duration_minutes: e.target.value })}
                     placeholder="30"
-                    className="w-full bg-zinc-800 border border-white/10 rounded-xl px-4 py-2.5 text-zinc-400 focus:border-amber-500 outline-none font-num cursor-not-allowed"
-                    title="ระยะเวลาถูกกำหนดไว้ที่ 30 นาที"
+                    className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none font-num"
                   />
                 </div>
               </div>

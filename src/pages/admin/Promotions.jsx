@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { Tag, Plus, Calendar, Percent, ToggleRight, ToggleLeft, Edit3, Trash2, X, Save, Check } from 'lucide-react';
 import { supabase } from '../../supabase/client';
 import Pagination from '../../components/Pagination';
+import { formatDate } from '../../utils/formatDate';
 
 export default function Promotions() {
   const [promotions, setPromotions] = useState([]);
@@ -17,6 +18,8 @@ export default function Promotions() {
   // Delete Confirmation State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+
+  const dateInputRef = useRef(null);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -99,11 +102,17 @@ export default function Promotions() {
   // Open Modal for Edit
   const handleEdit = (promo) => {
     setCurrentPromo(promo);
+    // Convert YYYY-MM-DD to DD/MM/YYYY for display in text input
+    let displayExpire = '';
+    if (promo.expire_date) {
+      const [year, month, day] = promo.expire_date.split('-');
+      displayExpire = `${day}/${month}/${year}`;
+    }
     setFormData({
       title: promo.title || '',
       code: promo.code || '',
       discount_text: promo.discount_text || '',
-      expire_date: promo.expire_date || '',
+      expire_date: displayExpire,
       active: promo.active ?? true,
     });
     setIsModalOpen(true);
@@ -138,11 +147,24 @@ export default function Promotions() {
       return;
     }
 
+    // Parse DD/MM/YYYY to Date object for validation or DB
+    let dbExpireDate = null;
+    if (formData.expire_date) {
+      const parts = formData.expire_date.split('/');
+      if (parts.length === 3) {
+        const [d, m, y] = parts;
+        dbExpireDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      } else {
+        // Fallback for direct YYYY-MM-DD if any
+        dbExpireDate = formData.expire_date;
+      }
+    }
+
     // Check if trying to save an active promotion with an expired date
-    if (formData.active && formData.expire_date) {
+    if (formData.active && dbExpireDate) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const expDate = new Date(formData.expire_date);
+      const expDate = new Date(dbExpireDate);
       if (expDate < today) {
         showNotification('วันหมดอายุต้องไม่เป็นอดีตเมื่อเปิดใช้งานโปรโมชั่น', 'warning');
         return;
@@ -150,16 +172,18 @@ export default function Promotions() {
     }
 
     try {
+      const payload = {
+        title: formData.title,
+        code: formData.code.toUpperCase(),
+        discount_text: formData.discount_text,
+        expire_date: dbExpireDate,
+        active: formData.active,
+      };
+
       if (currentPromo) {
         const { data, error } = await supabase
           .from('promotions')
-          .update({
-            title: formData.title,
-            code: formData.code.toUpperCase(),
-            discount_text: formData.discount_text,
-            expire_date: formData.expire_date || null,
-            active: formData.active,
-          })
+          .update(payload)
           .eq('id', currentPromo.id)
           .select()
           .single();
@@ -169,13 +193,7 @@ export default function Promotions() {
       } else {
         const { data, error } = await supabase
           .from('promotions')
-          .insert([{
-            title: formData.title,
-            code: formData.code.toUpperCase(),
-            discount_text: formData.discount_text,
-            expire_date: formData.expire_date || null,
-            active: formData.active,
-          }])
+          .insert([payload])
           .select()
           .single();
         if (error) throw error;
@@ -254,7 +272,7 @@ export default function Promotions() {
                 <h3 className={`text-xl font-bold mb-1 ${promo.active ? 'text-white' : 'text-zinc-500'}`}>{promo.title}</h3>
                 <div className="flex items-center gap-4 text-sm text-zinc-400 mt-3">
                   <span className={`flex items-center gap-1 font-bold ${promo.active ? 'text-green-400' : 'text-zinc-500'}`}><Percent size={14} /> {promo.discount_text}</span>
-                  <span className="flex items-center gap-1 font-num"><Calendar size={14} /> หมดเขต: {promo.expire_date || 'No Expiry'}</span>
+                  <span className="flex items-center gap-1 font-num"><Calendar size={14} /> หมดเขต: {formatDate(promo.expire_date)}</span>
                 </div>
               </div>
 
@@ -356,12 +374,43 @@ export default function Promotions() {
               </div>
               <div>
                 <label className="text-sm text-zinc-400 mb-1 block">วันหมดอายุ (ว่างไว้ = ไม่มีวันหมดอายุ)</label>
-                <input
-                  type="date"
-                  value={formData.expire_date}
-                  onChange={e => setFormData({ ...formData, expire_date: e.target.value })}
-                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none transition-colors"
-                />
+                <div className="relative">
+                  <Calendar size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
+                  <input
+                    type="text"
+                    value={formData.expire_date}
+                    onChange={e => {
+                      let val = e.target.value.replace(/[^0-9/]/g, '');
+                      if (val.length === 2 && !val.includes('/')) val += '/';
+                      if (val.length === 5 && val.split('/').length === 2) val += '/';
+                      if (val.length > 10) val = val.slice(0, 10);
+                      setFormData({ ...formData, expire_date: val });
+                    }}
+                    placeholder="วว/ดด/ปปปป"
+                    className="w-full bg-zinc-950 border border-white/10 rounded-xl pl-10 pr-12 py-2.5 text-white focus:border-amber-500 outline-none transition-colors"
+                  />
+                  {/* Hidden date input for picker */}
+                  <input
+                    type="date"
+                    ref={dateInputRef}
+                    className="absolute opacity-0 pointer-events-none w-0 h-0"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        const [y, m, d] = e.target.value.split('-');
+                        setFormData({ ...formData, expire_date: `${d}/${m}/${y}` });
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => dateInputRef.current?.showPicker()}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                    title="เลือกจากปฏิทิน"
+                  >
+                    <Calendar size={20} />
+                  </button>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1 ml-1">* พิมพ์เองเป็น วัน/เดือน/ปี หรือกดปุ่มปฏิทินเพื่อเลือก</p>
               </div>
 
               <div className="pt-4 flex gap-3">

@@ -4,6 +4,7 @@ import { supabase } from '../supabase/client';
 import { AuthContext } from '../context/AuthContext';
 import { io } from "socket.io-client";
 import Pagination from '../components/Pagination';
+import { formatDate } from '../utils/formatDate';
 import {
   Search, SlidersHorizontal, Star, Clock,
   Sparkles, X, ChevronRight,
@@ -944,8 +945,8 @@ export default function Booking() {
                                 </div>
                                 <div className="text-xs mt-1 opacity-80">{promo.discount_text}</div>
                                 {promo.expire_date && (
-                                  <div className={`text-[10px] mt-1 ${isExpiredForDate ? 'text-red-500 font-bold' : 'opacity-60'}`}>
-                                    หมดเขต: {promo.expire_date}
+                                  <div className={`text-xs mt-1 ${isExpiredForDate ? 'text-red-500 font-bold' : 'opacity-60'}`}>
+                                    หมดเขต: {formatDate(promo.expire_date)}
                                   </div>
                                 )}
                               </div>
