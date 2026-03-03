@@ -540,7 +540,16 @@ export default function Home() {
                 </div>
               </div>
               <div className="h-500px lg:h-auto bg-zinc-800 relative w-full group overflow-hidden">
-                <iframe title="Google Map" src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3820.596700547051!2d104.1453265!3d17.1610484!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMTfCsDA5JzM5LjgiTiAxMDTCsDA4JzQzLjIiRQ!5e0!3m2!1sth!2sth!4v1700000000000!5m2!1sth!2sth" width="100%" height="100%" style={{ border: 0 }} allowFullScreen loading="lazy" className="group-hover:brightness-110 transition-all duration-500"></iframe>
+                <iframe
+                  title="Google Map ร้านหล่อเลย"
+                  src="https://maps.google.com/maps?q=ร้านหล่อเลย+272/47+ถนนเทศบาลสงเคราะห์+สกลนคร&t=&z=17&ie=UTF8&iwloc=&output=embed"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  allowFullScreen
+                  loading="lazy"
+                  className="group-hover:brightness-110 transition-all duration-500"
+                ></iframe>
               </div>
             </div>
           </div>

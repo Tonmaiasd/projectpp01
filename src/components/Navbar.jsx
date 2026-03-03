@@ -22,11 +22,42 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const [showManual, setShowManual] = useState(false);
+
+  const openManual = () => setShowManual(true);
+  const closeManual = () => setShowManual(false);
+
+  // paths to images located in public/picformanual
+  const manualImages = [
+    "/picformanual/1.jpg",
+    "/picformanual/2.jpg",
+    "/picformanual/3.jpg",
+    "/picformanual/4.jpg",
+    "/picformanual/5.jpg",
+    "/picformanual/6.jpg",
+    "/picformanual/7.jpg",
+    "/picformanual/8.jpg",
+    "/picformanual/9.jpg",
+  ];
+
   const navItems = [
     { label: "หน้าแรก", link: "/" },
     { label: "จองคิว/บริการ", link: "/booking" },
     { label: "ข้อมูลส่วนตัว", link: "/profile" },
+    // manual button will open popup instead of navigating
+    { label: "คู่มือการใช้งาน", onClick: openManual },
   ];
+
+  // carousel state for manual images
+  const [currentIdx, setCurrentIdx] = useState(0);
+
+  useEffect(() => {
+    if (!showManual) return;
+    const timer = setInterval(() => {
+      setCurrentIdx((idx) => (idx + 1) % manualImages.length);
+    }, 15000); // advance every 10 seconds
+    return () => clearInterval(timer);
+  }, [showManual]);
 
   const renderAuthButton = () => {
     if (loading) {
@@ -99,19 +130,33 @@ export default function Navbar() {
 
             <div className="hidden lg:flex items-center gap-6 font-thai">
               <div className="flex items-center gap-1 bg-black/20 backdrop-blur-2xl px-2 py-2 rounded-full border border-white/10 shadow-2xl shadow-black/10 ring-1 ring-white/5">
-                {navItems.map((item) => (
-                  <NavLink
-                    key={item.link}
-                    to={item.link}
-                    className={({ isActive }) => `
-                        relative px-5 py-2 text-sm font-medium transition-all duration-300 uppercase tracking-wider group overflow-hidden rounded-full hover:bg-white/5 cursor-pointer
-                        ${isActive ? "text-white" : "text-zinc-400 hover:text-white"}
-                    `}
-                  >
-                    <span className="relative z-10">{item.label}</span>
-                    <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0"></span>
-                  </NavLink>
-                ))}
+                {navItems.map((item, idx) => {
+                    // if manual item, render button
+                    if (item.onClick) {
+                      return (
+                        <button
+                          key={idx}
+                          onClick={item.onClick}
+                          className="relative px-5 py-2 text-sm font-medium transition-all duration-300 uppercase tracking-wider group overflow-hidden rounded-full hover:bg-white/5 cursor-pointer text-zinc-400 hover:text-white"
+                        >
+                          <span className="relative z-10">{item.label}</span>
+                        </button>
+                      );
+                    }
+                    return (
+                      <NavLink
+                        key={item.link}
+                        to={item.link}
+                        className={({ isActive }) => `
+                            relative px-5 py-2 text-sm font-medium transition-all duration-300 uppercase tracking-wider group overflow-hidden rounded-full hover:bg-white/5 cursor-pointer
+                            ${isActive ? "text-white" : "text-zinc-400 hover:text-white"}
+                        `}
+                      >
+                        <span className="relative z-10">{item.label}</span>
+                        <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-1 h-1 bg-amber-500 rounded-full opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0"></span>
+                      </NavLink>
+                    );
+                  })}
               </div>
 
               {renderAuthButton()}
@@ -124,20 +169,88 @@ export default function Navbar() {
         </div>
 
         <div className={`fixed inset-0 bg-zinc-950/95 backdrop-blur-xl z-40 flex flex-col items-center justify-center space-y-8 transition-all duration-500 lg:hidden ${menuOpen ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-full pointer-events-none'}`}>
-           {navItems.map((item) => (
-              <NavLink
-                key={item.link}
-                to={item.link}
-                onClick={() => setMenuOpen(false)}
-                className={({ isActive }) => `text-3xl font-thai font-bold transition-colors cursor-pointer ${isActive ? "text-amber-500" : "text-white hover:text-amber-500"}`}
-              >
-                {item.label}
-              </NavLink>
-           ))}
+           {navItems.map((item, idx) => {
+              if (item.onClick) {
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => { setMenuOpen(false); item.onClick(); }}
+                    className="text-3xl font-thai font-bold transition-colors cursor-pointer text-white hover:text-amber-500"
+                  >
+                    {item.label}
+                  </button>
+                );
+              }
+              return (
+                <NavLink
+                  key={item.link}
+                  to={item.link}
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) => `text-3xl font-thai font-bold transition-colors cursor-pointer ${isActive ? "text-amber-500" : "text-white hover:text-amber-500"}`}
+                >
+                  {item.label}
+                </NavLink>
+              );
+           })}
            
            {renderMobileAuthButton()}
         </div>
       </nav>
+      {showManual && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+          {/* full-screen wrapper no padding for true responsive */}
+          <div className="relative w-full h-full">
+            <button
+              onClick={closeManual}
+              className="absolute top-4 right-4 text-3xl font-bold text-white hover:text-red-500 z-50"
+            >
+              ×
+            </button>
+            <h2 className="text-3xl font-bold text-white mb-6 text-center">
+              คู่มือการใช้งาน <span className="text-amber-500">Lor Loei Cuts</span>
+            </h2>
+            {/* sliding carousel row */}
+            <div className="relative flex flex-col items-center h-full">
+              <div className="overflow-hidden w-full flex-1 h-full">
+                <div
+                  className="flex h-full transition-transform duration-500 ease-in-out"
+                  style={{ transform: `translateX(-${currentIdx * 100}%)` }}
+                >
+                  {manualImages.map((src, idx) => (
+                    <img
+                      key={idx}
+                      src={src}
+                      alt={`คู่มือ ${idx + 1}`}
+                      className="w-full flex-shrink-0 max-h-[calc(100vh-100px)] object-contain"
+                    />
+                  ))}
+                </div>
+                {/* navigation arrows */}
+                <button
+                  onClick={() => setCurrentIdx((i) => (i - 1 + manualImages.length) % manualImages.length)}
+                  className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-black/50 text-white text-3xl p-3 rounded-full"
+                >‹</button>
+                <button
+                  onClick={() => setCurrentIdx((i) => (i + 1) % manualImages.length)}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-black/50 text-white text-3xl p-3 rounded-full"
+                >›</button>
+              </div>
+              {/* dot indicators */}
+              <div className="flex gap-2 mt-4">
+                {manualImages.map((_, idx) => (
+                  <span
+                    key={idx}
+                    onClick={() => setCurrentIdx(idx)}
+                    className={`w-3 h-3 rounded-full cursor-pointer transition-colors ${
+                      idx === currentIdx ? 'bg-amber-500' : 'bg-gray-300'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

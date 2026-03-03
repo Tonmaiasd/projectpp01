@@ -855,14 +855,16 @@ export default function Booking() {
                               onClick={() => setBookingData({ ...bookingData, time: slot })}
                               className={`py-2.5 rounded-xl text-sm font-num font-bold transition-all border ${bookingData.time === slot
                                 ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] scale-105'
-                                : (isAdminBusy || isBooked)
-                                  ? 'bg-red-500/10 text-red-500/80 border-red-500/20 cursor-not-allowed'
-                                  : isPast
-                                    ? 'bg-orange-500/10 text-orange-500 border-orange-500/20 cursor-not-allowed opacity-60'
-                                    : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
+                                : isBooked
+                                  ? 'bg-blue-500/20 text-blue-500 border-blue-500/40 cursor-not-allowed'
+                                  : isAdminBusy
+                                    ? 'bg-red-500/10 text-red-500/80 border-red-500/20 cursor-not-allowed'
+                                    : isPast
+                                      ? 'bg-orange-500/10 text-orange-500 border-orange-500/20 cursor-not-allowed opacity-60'
+                                      : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
                                 }`}
                             >
-                              {isAdminBusy ? 'ไม่ว่าง' : (isPast && !isBooked) ? 'เกินเวลาจอง' : slot}
+                              {isAdminBusy ? 'ไม่ว่าง' : (isPast ? 'เกินเวลาจอง' : slot)}
                             </button>
                           );
                         })}
