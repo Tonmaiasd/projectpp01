@@ -1,6 +1,7 @@
 import { useRef, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "../supabase/client";
 import { AuthContext } from "../context/AuthContext";
+import SERVER_URL from "../config/api";
 import Pagination from "../components/Pagination";
 import {
   User, Mail, Phone, MapPin, Edit2,
@@ -218,7 +219,7 @@ export default function Profile() {
     if (!user || !id) return;
 
     try {
-      const response = await fetch('http://localhost:3001/api/link-line-id', {
+      const response = await fetch(`${SERVER_URL}/api/link-line-id`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -400,7 +401,7 @@ export default function Profile() {
       const phone = (formData.phone || '').toString().trim();
 
       // ส่งคำขอไปที่ Server API เพื่ออัปเดตข้อมูลและเบอร์โทร Login
-      const response = await fetch('http://localhost:3001/api/user-update-profile', {
+      const response = await fetch(`${SERVER_URL}/api/user-update-profile`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -552,7 +553,7 @@ export default function Profile() {
 
     setCancelLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/cancel-booking', {
+      const response = await fetch(`${SERVER_URL}/api/cancel-booking`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -589,7 +590,7 @@ export default function Profile() {
 
     setRescheduleLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/reschedule-booking', {
+      const response = await fetch(`${SERVER_URL}/api/reschedule-booking`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -665,7 +666,7 @@ export default function Profile() {
 
     setEditBookingLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/user-update-booking', {
+      const response = await fetch(`${SERVER_URL}/api/user-update-booking`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -807,8 +808,8 @@ export default function Profile() {
                 disabled={booking.update_count >= 2}
                 onClick={() => handleEditBookingClick(booking)}
                 className={`text-xs flex items-center gap-1.5 transition-all border px-3 py-1.5 rounded-lg active:scale-95 ${booking.update_count >= 2
-                    ? "text-zinc-500 border-zinc-500/30 bg-zinc-500/5 cursor-not-allowed opacity-50"
-                    : "text-blue-400 hover:text-white border-blue-400/30 bg-blue-400/5 hover:bg-blue-400/20"
+                  ? "text-zinc-500 border-zinc-500/30 bg-zinc-500/5 cursor-not-allowed opacity-50"
+                  : "text-blue-400 hover:text-white border-blue-400/30 bg-blue-400/5 hover:bg-blue-400/20"
                   }`}
               >
                 <Edit2 size={14} /> {booking.update_count >= 2 ? 'แก้ไขครบแล้ว' : 'แก้ไขทรงผม'}
@@ -817,8 +818,8 @@ export default function Profile() {
                 disabled={booking.reschedule_count >= 2}
                 onClick={() => handleRescheduleRequest(booking)}
                 className={`text-xs flex items-center gap-1.5 transition-all border px-3 py-1.5 rounded-lg active:scale-95 ${booking.reschedule_count >= 2
-                    ? "text-zinc-500 border-zinc-500/30 bg-zinc-500/5 cursor-not-allowed opacity-50"
-                    : "text-amber-500 hover:text-white border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/20"
+                  ? "text-zinc-500 border-zinc-500/30 bg-zinc-500/5 cursor-not-allowed opacity-50"
+                  : "text-amber-500 hover:text-white border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/20"
                   }`}
               >
                 <CalendarClock size={14} /> {booking.reschedule_count >= 2 ? 'เลื่อนครบแล้ว' : 'เลื่อนคิว'}

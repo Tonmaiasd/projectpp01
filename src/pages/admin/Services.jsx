@@ -3,6 +3,7 @@ import { Plus, Edit3, Trash2, Clock, DollarSign, X, Check, Save, Loader2 } from 
 import { supabase } from '../../supabase/client';
 import Pagination from '../../components/Pagination';
 import { io } from "socket.io-client";
+import SERVER_URL from '../../config/api';
 
 export default function Services() {
 
@@ -125,7 +126,7 @@ export default function Services() {
       setConfirmDelete(null);
 
       // --- SOCKET.IO REALTIME NOTIFICATION ---
-      const socket = io("http://localhost:3001");
+      const socket = io(SERVER_URL);
       socket.emit("servicesUpdate");
       setTimeout(() => socket.disconnect(), 1000);
     }
@@ -183,7 +184,7 @@ export default function Services() {
       setIsModalOpen(false);
 
       // --- SOCKET.IO REALTIME NOTIFICATION ---
-      const socket = io("http://localhost:3001");
+      const socket = io(SERVER_URL);
       socket.emit("servicesUpdate");
       setTimeout(() => socket.disconnect(), 1000);
 

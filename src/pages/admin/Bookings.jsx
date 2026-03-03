@@ -24,6 +24,7 @@ import {
 import { supabase } from "../../supabase/client";
 import { AuthContext } from "../../context/AuthContext";
 import { io } from "socket.io-client";
+import SERVER_URL from "../../config/api";
 
 export default function Bookings() {
   const { user } = useContext(AuthContext);
@@ -296,7 +297,7 @@ export default function Bookings() {
     setRescheduleLoading(true);
     try {
       const response = await fetch(
-        "http://localhost:3001/api/admin-reschedule-booking",
+        `${SERVER_URL}/api/admin-reschedule-booking`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -517,7 +518,7 @@ export default function Bookings() {
   const socketRef = useRef(null);
 
   useEffect(() => {
-    const socket = io("http://localhost:3001");
+    const socket = io(SERVER_URL);
     socketRef.current = socket;
 
     socket.on("connect", () => {
@@ -676,7 +677,7 @@ export default function Bookings() {
   const handleNotifyNextQueue = async () => {
     setNotifyingNextQueue(true);
     try {
-      const response = await fetch("http://localhost:3001/api/next-queue", {
+      const response = await fetch(`${SERVER_URL}/api/next-queue`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -698,7 +699,7 @@ export default function Bookings() {
   const handleNotifyBooking = async (bookingId) => {
     if (!bookingId) return;
     try {
-      const response = await fetch("http://localhost:3001/api/notify-booking", {
+      const response = await fetch(`${SERVER_URL}/api/notify-booking`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ booking_id: String(bookingId) }),
@@ -746,13 +747,13 @@ export default function Bookings() {
       let body = {};
 
       if (busyForm.mode === "full") {
-        endpoint = "http://localhost:3001/api/cancel-full-day-bookings";
+        endpoint = `${SERVER_URL}/api/cancel-full-day-bookings`;
         body = { date: confirmDate };
       } else if (busyForm.mode === "multi") {
-        endpoint = "http://localhost:3001/api/cancel-multi-day-bookings";
+        endpoint = `${SERVER_URL}/api/cancel-multi-day-bookings`;
         body = { startDate: confirmDate, endDate: confirmEndDate };
       } else {
-        endpoint = "http://localhost:3001/api/cancel-time-range-bookings";
+        endpoint = `${SERVER_URL}/api/cancel-time-range-bookings`;
         body = {
           date: confirmDate,
           startTime: busyForm.startTime,

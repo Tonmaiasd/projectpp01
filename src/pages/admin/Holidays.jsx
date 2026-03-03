@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabase/client';
 import { CalendarX, Trash2, Clock, Calendar as CalendarIcon, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import SERVER_URL from '../../config/api';
 
 export default function AdminHolidays() {
     const [holidays, setHolidays] = useState([]);
@@ -59,7 +60,7 @@ export default function AdminHolidays() {
         setShowConfirmModal(false);
         setIsDeleting(id);
         try {
-            const response = await fetch('http://localhost:3001/api/delete-holiday', {
+            const response = await fetch(`${SERVER_URL}/api/delete-holiday`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id })

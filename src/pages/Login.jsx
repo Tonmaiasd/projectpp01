@@ -222,7 +222,7 @@ export default function Login() {
         {/* --- LEFT SIDE --- */}
         <div className="relative hidden md:block overflow-hidden group">
           <img
-            src="https://images.unsplash.com/photo-1503951914205-b27cfca5639e?q=80&w=2070&auto=format&fit=crop"
+            src="343569140_1245738432983853_2350402525974753891_n.jpg"
             alt="Barbershop Atmosphere"
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60"
           />

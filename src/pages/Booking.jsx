@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase/client';
 import { AuthContext } from '../context/AuthContext';
 import { io } from "socket.io-client";
+import SERVER_URL from '../config/api';
 import Pagination from '../components/Pagination';
 import { formatDate } from '../utils/formatDate';
 import {
@@ -188,7 +189,7 @@ export default function Booking() {
     fetchInitialData();
 
     // --- SOCKET.IO REALTIME NOTIFICATION ---
-    const socket = io("http://localhost:3001");
+    const socket = io(SERVER_URL);
     socket.on("servicesUpdate", () => {
       console.log('✨ Socket.io: Received servicesUpdate, fetching updated services...');
       fetchServices();
@@ -470,7 +471,7 @@ export default function Booking() {
       });
 
       // 3) ส่งแจ้งเตือนไปยัง LINE ทันที
-      fetch('http://localhost:3001/api/line/notify', {
+      fetch(`${SERVER_URL}/api/line/notify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -487,7 +488,7 @@ export default function Booking() {
       }).catch(err => console.warn('LINE Notify background error:', err));
 
       // --- SOCKET.IO REALTIME NOTIFICATION ---
-      const socket = io("http://localhost:3001");
+      const socket = io(SERVER_URL);
       socket.emit("bookingUpdate");
       setTimeout(() => socket.disconnect(), 1000);
 

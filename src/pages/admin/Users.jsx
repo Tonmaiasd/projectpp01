@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Search, Mail, Phone, User, Edit2, Trash2, X, Save, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../../supabase/client';
 import Pagination from '../../components/Pagination';
+import SERVER_URL from '../../config/api';
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,7 +71,7 @@ export default function UsersPage() {
       }
 
       // ส่งคำขอไปที่ Server API เพื่ออัปเดตทั้ง Auth และ Profile
-      const response = await fetch('http://localhost:3001/api/admin-update-user', {
+      const response = await fetch(`${SERVER_URL}/api/admin-update-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
