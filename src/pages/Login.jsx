@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
+import { AuthContext } from "../context/AuthContext";
 import {
   Scissors,
   Mail,
@@ -10,109 +11,203 @@ import {
   Phone,
   ArrowLeft,
   ChevronRight,
-  ShieldCheck 
+  ShieldCheck,
+  CheckCircle,
+  XCircle,
+  AlertCircle
 } from "lucide-react";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login, register, loginWithLine, user, isAdmin, loading: authLoading } = useContext(AuthContext);
+
+  // --- LIFF ID ---
+  const LIFF_ID = "2008933197-lBD8ZDCI";
+  const [liffLoading, setLiffLoading] = useState(false);
+  const [isRedirectFromBooking, setIsRedirectFromBooking] = useState(false);
+
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
+
+  const showNotification = (message, type = 'info') => {
+    setNotification({ show: true, message, type });
+    if (type === 'success') {
+      setTimeout(() => setNotification(prev => ({ ...prev, show: false })), 3000);
+    }
+  };
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('redirect') === 'booking') {
+      setIsRedirectFromBooking(true);
+      setError("กรุณาเข้าสู่ระบบผ่านเพื่อเริ่มการจองคิว");
+    }
+  }, []);
 
   // --- State ---
   const [currentPage, setCurrentPage] = useState("login"); // 'login' or 'register'
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+  const [error, setError] = useState(null);
+
   // Form Data
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
     name: "",
+    password: "",
     phone: ""
   });
 
   // Animation Trigger
   const [animate, setAnimate] = useState(false);
 
+  // --- 1. Redirection Logic ---
   useEffect(() => {
-    // เมื่อ currentPage เปลี่ยน (หรือโหลดครั้งแรก) ให้รอ 50ms แล้วค่อยแสดงผล (Fade-in)
+    if (!authLoading && user) {
+      if (isAdmin) {
+        navigate("/admin/dashboard");
+      } else {
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirect = urlParams.get('redirect');
+        if (redirect === 'booking') {
+          navigate("/booking");
+        } else {
+          navigate("/");
+        }
+      }
+    }
+  }, [user, isAdmin, authLoading, navigate]);
+
+  // Handle Automatic LINE Login after redirect
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const state = urlParams.get('state');
+
+    if (code && state && !user && !authLoading) {
+      handleLineLogin();
+    }
+  }, [user, authLoading]);
+
+  // --- Animation Effect ---
+  useEffect(() => {
     const timer = setTimeout(() => setAnimate(true), 50);
     return () => clearTimeout(timer);
   }, [currentPage]);
 
-  // Handle Input Change
+  // --- แก้ไขจุดที่ 1: Handle Input Change เพื่อกรองตัวเลขช่องเบอร์โทร ---
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+
+    if (name === "phone") {
+      // ลบทุกอย่างที่ไม่ใช่ตัวเลข 0-9 ออกไปทันที
+      const onlyNums = value.replace(/[^0-9]/g, '');
+      setFormData({ ...formData, [name]: onlyNums });
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
+    setError(null);
   };
 
-  // --- Logic การทำงาน ---
+  // --- Handlers ---
 
-  // 1. ฟังก์ชัน Login
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    
-    // Validation: เช็คว่ากรอกข้อมูลครบไหม
-    if (!formData.email || !formData.password) {
-        alert("กรุณากรอก อีเมล/เบอร์โทรศัพท์ และรหัสผ่าน");
-        return;
+    if (!formData.phone || !formData.password) {
+      setError("กรุณากรอกเบอร์โทรและรหัสผ่าน");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      await login(formData.phone, formData.password);
+    } catch (err) {
+      setError("เข้าสู่ระบบไม่สำเร็จ เบอร์โทรหรือรหัสผ่านไม่ถูกต้อง");
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async (e) => {
+    e.preventDefault();
+    if (!formData.name || !formData.phone || !formData.password) {
+      setError("กรุณากรอกข้อมูลให้ครบถ้วน");
+      return;
+    }
+
+    if (!/^\d{10}$/.test(formData.phone)) {
+      setError("เบอร์โทรต้องมี 10 ตัวเลข");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError("รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร");
+      return;
     }
 
     setLoading(true);
-
-    // จำลอง API Call (หน่วงเวลา 1.5 วินาที)
-    setTimeout(() => {
+    setError(null);
+    try {
+      await register(formData.phone, formData.password, {
+        data: { name: formData.name, phone: formData.phone }
+      });
+      showNotification("สมัครสมาชิกเรียบร้อย! กรุณารอการยืนยันข้อมูล", "success");
+      setAnimate(false);
+      setCurrentPage("login");
+      setFormData({ phone: "", password: "", name: "" });
+    } catch (err) {
+      console.error('Registration error:', err);
+      setError("เบอร์โทรนี้ถูกใช้งานแล้ว");
+    } finally {
       setLoading(false);
-      
-      // *** ตรวจสอบพิเศษ: ถ้าใช้อีเมล admin ให้ไปหน้า Admin Dashboard ***
-      if (formData.email === "admin" && formData.password === "admin") {
-          localStorage.setItem("admin_token", "super-secret-admin-token");
-          alert("เข้าสู่ระบบผู้ดูแลระบบเรียบร้อย");
-          navigate("/admin/dashboard");
-          return;
-      }
-
-      // *** กรณีลูกค้าทั่วไป ***
-      localStorage.setItem("token", "dummy-user-token-123456");
-      
-      // สร้างชื่อ User จากข้อมูลที่กรอก (ตัด @ ออกถ้าเป็นอีเมล)
-      const userNameDisplay = formData.email.includes('@') 
-        ? formData.email.split('@')[0] 
-        : formData.email;
-        
-      localStorage.setItem("user_name", userNameDisplay);
-
-      // ใช้ window.location.href แทน navigate เพื่อให้ Navbar รีเฟรชสถานะทันที
-      window.location.href = "/"; 
-    }, 1500);
-  };
-
-  // 2. ฟังก์ชัน Register
-  const handleRegister = (e) => {
-    e.preventDefault();
-    
-    if (!formData.name || !formData.email || !formData.password) {
-        alert("กรุณากรอกข้อมูลให้ครบถ้วน");
-        return;
     }
-
-    setLoading(true);
-
-    // จำลอง API Call
-    setTimeout(() => {
-      setLoading(false);
-      alert("สมัครสมาชิกเรียบร้อย! กรุณาเข้าสู่ระบบ");
-      
-      // สั่งซ่อนก่อนเปลี่ยนหน้า เพื่อให้ effect ทำงานตอนเปลี่ยนกลับมา login
-      setAnimate(false); 
-      setCurrentPage("login"); 
-      setFormData({ ...formData, password: "" }); // ล้างรหัสผ่าน
-    }, 1500);
   };
 
-  // ฟังก์ชันสำหรับสลับหน้า (Login <-> Register)
   const togglePage = () => {
-    // สั่งซ่อนเนื้อหาเก่าทันที แล้วค่อยเปลี่ยนหน้า
     setAnimate(false);
+    setError(null);
     setCurrentPage(currentPage === "login" ? "register" : "login");
   };
+
+  const handleLineLogin = async () => {
+    setLiffLoading(true);
+    setError(null);
+
+    const loadLiffScript = () => {
+      return new Promise((resolve, reject) => {
+        if (window.liff) return resolve();
+        const script = document.createElement('script');
+        script.src = 'https://static.line-scdn.net/liff/edge/2/sdk.js';
+        script.async = true;
+        script.onload = resolve;
+        script.onerror = () => reject(new Error("Failed to load LIFF SDK"));
+        document.body.appendChild(script);
+      });
+    };
+
+    try {
+      await loadLiffScript();
+      await window.liff.init({ liffId: LIFF_ID });
+
+      if (!window.liff.isLoggedIn()) {
+        window.liff.login({ redirectUri: window.location.href });
+        return;
+      }
+
+      const profile = await window.liff.getProfile();
+      await loginWithLine(profile);
+    } catch (err) {
+      console.error("LINE Login Error:", err);
+      setError("การเข้าสู่ระบบผ่าน LINE ล้มเหลว: " + err.message);
+    } finally {
+      setLiffLoading(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4 md:p-8 font-sans selection:bg-amber-500 selection:text-black relative">
@@ -122,21 +217,19 @@ export default function Login() {
         .font-sans { font-family: 'Manrope', sans-serif; }
       `}</style>
 
-      {/* Grid Layout: ซ้ายรูปภาพ / ขวาฟอร์ม */}
-      <div className="bg-zinc-900 w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden grid md:grid-cols-2 border border-white/10 min-h-[600px] relative z-10">
-        
-        {/* --- LEFT SIDE: IMAGE & BRANDING --- */}
+      <div className="bg-zinc-900 w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden grid md:grid-cols-2 border border-white/10 min-h-150 relative z-10">
+
+        {/* --- LEFT SIDE --- */}
         <div className="relative hidden md:block overflow-hidden group">
-          <img 
-            src="https://images.unsplash.com/photo-1503951914205-b27cfca5639e?q=80&w=2070&auto=format&fit=crop" 
-            alt="Barbershop Atmosphere" 
+          <img
+            src="343569140_1245738432983853_2350402525974753891_n.jpg"
+            alt="Barbershop Atmosphere"
             className="absolute inset-0 w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/50 to-transparent"></div>
-          
+          <div className="absolute inset-0 bg-linear-to-t from-black via-black/50 to-transparent"></div>
           <div className="absolute bottom-10 left-10 right-10 z-10">
             <div className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(245,158,11,0.5)]">
-               <Scissors className="w-8 h-8 text-black" />
+              <Scissors className="w-8 h-8 text-black" />
             </div>
             <h2 className="text-4xl font-serif font-bold text-white mb-4">Lor Loei Cuts</h2>
             <p className="text-zinc-300 leading-relaxed text-lg">
@@ -145,10 +238,9 @@ export default function Login() {
           </div>
         </div>
 
-        {/* --- RIGHT SIDE: FORM --- */}
+        {/* --- RIGHT SIDE --- */}
         <div className="relative flex flex-col justify-center p-8 md:p-12 lg:p-16">
-          {/* Back Button */}
-          <button 
+          <button
             onClick={() => navigate("/")}
             className="absolute top-6 left-6 p-2 rounded-full hover:bg-white/5 text-zinc-400 hover:text-white transition-colors flex items-center gap-2 text-sm group"
           >
@@ -156,115 +248,89 @@ export default function Login() {
           </button>
 
           <div className={`transition-all duration-500 transform ${animate ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"}`}>
-            
+
             <div className="mb-10 mt-8">
-                <span className="text-amber-500 font-bold tracking-widest uppercase text-xs mb-2 block">
-                    {currentPage === "login" ? "Welcome Back" : "Join Us Today"}
-                </span>
-                <h2 className="text-3xl md:text-4xl font-serif font-bold text-white mb-2">
-                    {currentPage === "login" ? "เข้าสู่ระบบ" : "สร้างบัญชีใหม่"}
-                </h2>
-                <p className="text-zinc-500">
-                    {currentPage === "login" 
-                        ? "กรอกข้อมูลเพื่อเข้าใช้งานระบบจองคิว" 
-                        : "สมัครสมาชิกเพื่อรับสิทธิพิเศษและโปรโมชั่น"}
-                </p>
+              <span className="text-amber-500 font-bold tracking-widest uppercase text-xs mb-2 block">
+                {currentPage === "login" ? "Welcome Back" : "Join Us Today"}
+              </span>
+              <h2 className="text-3xl md:text-4xl font-serif font-bold text-white mb-2">
+                {isRedirectFromBooking ? "เข้าสู่ระบบ LINE เพื่อจองคิว" : (currentPage === "login" ? "เข้าสู่ระบบ" : "สร้างบัญชีใหม่")}
+              </h2>
+              <p className="text-zinc-500">
+                {currentPage === "login"
+                  ? "กรอกข้อมูลเพื่อเข้าใช้งานระบบจองคิว"
+                  : "สมัครสมาชิกเพื่อรับสิทธิพิเศษและโปรโมชั่น"}
+              </p>
             </div>
 
-            <form onSubmit={currentPage === "login" ? handleLogin : handleRegister} className="space-y-5">
-              
-              {/* Name Field (Register Only) */}
-              {currentPage === "register" && (
-                <div className="group">
-                   <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <User className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
-                      </div>
-                      <input
-                        type="text"
-                        name="name"
-                        placeholder="ชื่อ-นามสกุล"
-                        value={formData.name}
-                        onChange={handleChange}
-                        className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
-                      />
-                   </div>
-                </div>
-              )}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500 text-red-400 p-3 rounded-lg mb-4 text-sm flex items-center gap-2">
+                <AlertCircle size={16} /> {error}
+              </div>
+            )}
 
-              {/* Email or Phone Field */}
-              <div className="group">
-                 <div className="relative">
+            <form onSubmit={currentPage === "login" ? handleLogin : handleRegister} className="space-y-5">
+              {/* --- Name Input (Register Only) --- */}
+              {currentPage === "register" && (
+                <div className="group animate-[slideDown_0.3s_ease-out]">
+                  <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      {/* เปลี่ยนไอคอนตามหน้า: Login ใช้ User (สื่อถึง ID), Register ใช้ Mail */}
-                      {currentPage === "login" ? (
-                        <User className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
-                      ) : (
-                        <Mail className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
-                      )}
+                      <User className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
                     </div>
                     <input
-                      type={currentPage === "login" ? "text" : "email"}
-                      name="email" // ใช้ key เดิม (email) ในการเก็บค่า เพื่อให้ logic ไม่ซับซ้อน
-                      placeholder={currentPage === "login" ? "อีเมล หรือ เบอร์โทรศัพท์ (Admin: admin)" : "อีเมลของคุณ"}
-                      value={formData.email}
+                      type="text"
+                      name="name"
+                      placeholder="ชื่อ-นามสกุล"
+                      value={formData.name}
                       onChange={handleChange}
                       className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
                     />
-                 </div>
-              </div>
-
-               {/* Phone Field (Register Only) */}
-               {currentPage === "register" && (
-                <div className="group">
-                   <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Phone className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
-                      </div>
-                      <input
-                        type="tel"
-                        name="phone"
-                        placeholder="เบอร์โทรศัพท์"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
-                      />
-                   </div>
+                  </div>
                 </div>
               )}
 
-              {/* Password Field */}
+              {/* --- Phone Input (Login & Register) --- */}
               <div className="group">
-                 <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
-                    </div>
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      name="password"
-                      placeholder={currentPage === "login" ? "รหัสผ่าน (Admin: admin)" : "รหัสผ่าน"}
-                      value={formData.password}
-                      onChange={handleChange}
-                      className="w-full bg-zinc-950 text-white pl-12 pr-12 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-500 hover:text-white transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                    </button>
-                 </div>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Phone className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
+                  </div>
+                  <input
+                    type="tel"
+                    name="phone"
+                    inputMode="numeric"
+                    placeholder="เบอร์โทรศัพท์ (10 หลัก)"
+                    value={formData.phone}
+                    onChange={handleChange}
+                    maxLength="10"
+                    className="w-full bg-zinc-950 text-white pl-12 pr-4 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
+                  />
+                </div>
               </div>
 
-              {/* Forgot Password (Login Only) */}
-              {currentPage === "login" && (
-                <div className="flex justify-end">
-                   <a href="#" className="text-sm text-zinc-500 hover:text-amber-500 transition-colors">ลืมรหัสผ่าน?</a>
+              <div className="group">
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <Lock className="h-5 w-5 text-zinc-500 group-focus-within:text-amber-500 transition-colors" />
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    placeholder="รหัสผ่าน"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="w-full bg-zinc-950 text-white pl-12 pr-12 py-4 rounded-xl border border-white/10 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none transition-all placeholder:text-zinc-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-zinc-500 hover:text-white transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
-              )}
+              </div>
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}
@@ -284,7 +350,6 @@ export default function Login() {
               </button>
             </form>
 
-            {/* Toggle Login/Register */}
             <div className="mt-8 text-center pt-6 border-t border-white/5">
               <p className="text-zinc-500">
                 {currentPage === "login" ? "ยังไม่มีบัญชีสมาชิก?" : "มีบัญชีอยู่แล้ว?"}
@@ -297,21 +362,26 @@ export default function Login() {
                 </button>
               </p>
             </div>
-
           </div>
         </div>
       </div>
 
-      {/* --- Admin Shortcut (Optional) --- */}
       <div className="absolute bottom-4 right-4 z-20 opacity-30 hover:opacity-100 transition-opacity">
-          <button 
-            onClick={() => navigate("/admin/dashboard")}
-            className="flex items-center gap-2 text-xs text-white bg-zinc-800 px-3 py-1 rounded-full border border-white/10 hover:bg-zinc-700"
-          >
-              <ShieldCheck size={12} /> Admin Portal
-          </button>
+        <button
+          onClick={() => navigate("/admin/dashboard")}
+          className="flex items-center gap-2 text-xs text-white bg-zinc-800 px-3 py-1 rounded-full border border-white/10 hover:bg-zinc-700"
+        >
+          <ShieldCheck size={12} /> Admin Portal
+        </button>
       </div>
 
+      {/* Notification Toast */}
+      {notification.show && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-100 bg-zinc-900 border border-white/10 px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
+          {notification.type === 'success' ? <CheckCircle className="text-green-500" /> : <AlertCircle className="text-amber-500" />}
+          <span className="text-white">{notification.message}</span>
+        </div>
+      )}
     </div>
   );
 }

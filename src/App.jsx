@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import Layout from "./layouts/Layout";
-import ProtectedRoute from "./routes/ProtectedRoute";
+import UserProtectedRoute from "./routes/UserProtectedRoute";
+import AdminRoute from "./routes/AdminRoute";
 
 // User Pages
 import Home from "./pages/Home";
@@ -15,6 +16,8 @@ import AdminBookings from "./pages/admin/Bookings";
 import AdminServices from "./pages/admin/Services";
 import AdminUsers from "./pages/admin/Users";
 import AdminPromotions from "./pages/admin/Promotions";
+import AdminHolidays from "./pages/admin/Holidays";
+import AdminComments from "./pages/admin/comments";
 
 export default function App() {
   return (
@@ -25,7 +28,7 @@ export default function App() {
       {/* --- User Routes (ลูกค้า) --- */}
       <Route element={<Layout />}>
         <Route path="/" element={<Home />} />
-        
+
         {/* หน้า Booking เปิดให้ทุกคนเข้าดูได้ (เช็ค Login ตอนกดปุ่มจอง) */}
         <Route path="/booking" element={<Booking />} />
 
@@ -33,23 +36,32 @@ export default function App() {
         <Route
           path="/profile"
           element={
-            <ProtectedRoute>
+            <UserProtectedRoute>
               <Profile />
-            </ProtectedRoute>
+            </UserProtectedRoute>
           }
         />
       </Route>
 
       {/* --- Admin Routes (หลังบ้าน) --- */}
-      <Route path="/admin" element={<AdminLayout />}>
+      <Route
+        path="/admin"
+        element={
+          <AdminRoute>
+            <AdminLayout />
+          </AdminRoute>
+        }
+      >
         {/* เมื่อเข้า /admin เฉยๆ ให้เด้งไปหน้า dashboard */}
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
-        
+
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="bookings" element={<AdminBookings />} />
         <Route path="services" element={<AdminServices />} />
         <Route path="users" element={<AdminUsers />} />
         <Route path="promotions" element={<AdminPromotions />} />
+        <Route path="holidays" element={<AdminHolidays />} />
+        <Route path="comments" element={<AdminComments />} />
       </Route>
 
       {/* Catch-all route: ถ้าพิมพ์ URL ผิด ให้กลับไปหน้าแรก */}
