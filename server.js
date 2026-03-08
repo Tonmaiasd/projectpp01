@@ -11,14 +11,45 @@ dotenv.config(); // Load environment variables from .env file
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// CORS: อนุญาต Vercel frontend และ localhost ตอน dev
+const allowedOrigins = [
+  process.env.FRONTEND_URL,          // e.g. https://your-app.vercel.app
+  'http://localhost:8888',
+  'http://localhost:3000',
+  'http://localhost:5173',
+].filter(Boolean); // ลบ undefined ออก
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // อนุญาต request ที่ไม่มี origin (เช่น Postman, cURL, server-to-server)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.some(o => origin.startsWith(o.replace(/\/$/, '')))) {
+      return callback(null, true);
+    }
+    // Fallback: Vercel preview URLs (**-*.vercel.app)
+    if (/\.vercel\.app$/.test(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`CORS policy: origin ${origin} not allowed`));
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true,
+}));
 app.use(express.json());
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.some(o => origin.startsWith(o.replace(/\/$/, '')))) {
+        return callback(null, true);
+      }
+      if (/\.vercel\.app$/.test(origin)) return callback(null, true);
+      return callback(new Error(`Socket CORS: ${origin} not allowed`));
+    },
+    methods: ["GET", "POST"],
+    credentials: true,
   }
 });
 
