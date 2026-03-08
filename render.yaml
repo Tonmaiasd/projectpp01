@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: projectpp01-server
+    runtime: node
+    plan: free
+    branch: fluk
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_DEFAULT_TO
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
