@@ -1241,9 +1241,21 @@ export default function Bookings() {
                             </button>
 
                             <button
-                              onClick={() =>
-                                handleUpdateStatus(booking.id, "Cancelled")
-                              }
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(`${SERVER_URL}/api/admin-cancel-no-show`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ bookingId: booking.id }),
+                                  });
+                                  const result = await response.json();
+                                  if (!response.ok) throw new Error(result.error || "Failed to cancel");
+                                  showNotification(result.message, "success");
+                                } catch (err) {
+                                  console.error("Error cancelling booking:", err);
+                                  showNotification(err.message, "error");
+                                }
+                              }}
                               disabled={booking.status !== "Pending"}
                               className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${booking.status === "Pending"
                                 ? "bg-red-500/5 border-red-500/20 text-red-500 hover:bg-red-500 hover:text-white shadow-xl hover:shadow-red-500/20"

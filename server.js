@@ -640,6 +640,52 @@ app.post('/api/cancel-booking', async (req, res) => {
   }
 });
 
+// Endpoint: Admin ยกเลิกคิวเนื่องจากลูกค้าไม่มาใช้บริการ + แจ้งเตือน LINE
+app.post('/api/admin-cancel-no-show', async (req, res) => {
+  const { bookingId } = req.body;
+  const SUPABASE_URL = process.env.SUPABASE_URL;
+  const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!bookingId) {
+    return res.status(400).json({ error: 'Missing bookingId' });
+  }
+
+  try {
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // 1. ดึงข้อมูล booking ก่อน
+    const { data: booking, error: fetchError } = await supabaseAdmin
+      .from('bookings')
+      .select('*')
+      .eq('id', bookingId)
+      .single();
+
+    if (fetchError || !booking) {
+      return res.status(404).json({ error: 'ไม่พบรายการจองที่ระบุ' });
+    }
+
+    // 2. Update status to Cancelled
+    const { error: updateError } = await supabaseAdmin
+      .from('bookings')
+      .update({ status: 'Cancelled' })
+      .eq('id', bookingId);
+
+    if (updateError) throw updateError;
+
+    // 3. ส่ง LINE แจ้งเตือน (ข้อความเฉพาะ: ไม่มาใช้บริการ)
+    const formattedDate = new Date(booking.booking_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+    const msg = `❌ แจ้งเตือนจากทางร้าน Lor Loei Cuts ครับ\n\nเราได้ยกเลิกคิวของคุณ ${booking.customer_name} แล้ว\n🔹 บริการ: ${booking.service_name}\n📅 วันที่: ${formattedDate}\n⏰ เวลา: ${booking.booking_time.slice(0, 5)} น.\n\nเนื่องจากคุณไม่มาใช้บริการของเราในเวลาที่กำหนด หากต้องการจองใหม่ กรุณาติดต่อหรือจองผ่านแอปได้เลยครับ 🙏`;
+
+    await sendLineNotification(supabaseAdmin, booking, msg);
+
+    res.json({ success: true, message: `ยกเลิกคิวและแจ้งเตือนคุณ ${booking.customer_name} เรียบร้อยแล้ว` });
+    notifyBookingUpdate();
+  } catch (err) {
+    console.error('Error in /api/admin-cancel-no-show:', err.message);
+    res.status(500).json({ error: 'Failed to cancel booking: ' + err.message });
+  }
+});
+
 // Endpoint: ผู้ใช้แก้ไขรายการจอง (เฉพาะทรงผมและโปรโมชั่น) และแจ้งเตือน LINE
 app.post('/api/user-update-booking', async (req, res) => {
   const { bookingId, serviceName, price, appliedPromo } = req.body;
