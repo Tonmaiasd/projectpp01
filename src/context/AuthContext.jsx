@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState, useEffect, useRef } from "react";
 import { supabase } from "../supabase/client";
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -32,45 +32,56 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const initDone = useRef(false);
+
   useEffect(() => {
+    let isMounted = true;
+
+    // STEP 1: ใช้ getSession() สำหรับ initial load เสมอ (เชื่อถือได้ 100%)
+    // ไม่พึ่ง onAuthStateChange เพราะอาจ fire ช้าหรือ fire null ก่อน
     const initializeAuth = async () => {
-      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!isMounted) return;
 
-      // 1. ตรวจสอบ Session ปัจจุบัน (ตอน Refresh หน้าจอ)
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (session?.user) {
-        setUser(session.user);
-        await fetchUserRole(session.user.id);
-      } else {
-        setUser(null);
-        setIsAdmin(false);
+        if (session?.user) {
+          setUser(session.user);
+          await fetchUserRole(session.user.id);
+        } else {
+          setUser(null);
+          setIsAdmin(false);
+        }
+      } catch (err) {
+        console.error('Auth init error:', err);
+      } finally {
+        if (isMounted) {
+          initDone.current = true;
+          setLoading(false);
+        }
       }
-
-      setLoading(false);
     };
 
     initializeAuth();
 
-    // 2. Listener สำหรับ Auth State Change
+    // STEP 2: onAuthStateChange สำหรับ event หลัง init เสร็จเท่านั้น
+    // (SIGNED_OUT, TOKEN_REFRESHED, และ SIGNED_IN หลังจาก login ปกติ)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        // Log นี้อาจจะขึ้นช้ากว่าการ Redirect ในบางครั้ง
-        if (session?.user) {
-          setUser(session.user);
-          // เราจะไม่ set loading ตรงนี้ เพราะจะไปตีกับฟังก์ชัน login หลัก
-          // ปล่อยให้มัน update state เงียบๆ ถ้าเป็นการ refresh token
-          if (event === 'TOKEN_REFRESHED') {
-            await fetchUserRole(session.user.id);
-          }
-        }
-      } else if (event === 'SIGNED_OUT') {
+      if (!isMounted) return;
+      // ยังไม่ init เสร็จ → ข้ามไป (getSession() จัดการแทน)
+      if (!initDone.current) return;
+
+      if (event === 'SIGNED_OUT') {
         setUser(null);
         setIsAdmin(false);
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        setUser(session.user);
+        await fetchUserRole(session.user.id);
       }
+      // SIGNED_IN หลัง login → login() function จัดการ state เองแล้ว
     });
 
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);

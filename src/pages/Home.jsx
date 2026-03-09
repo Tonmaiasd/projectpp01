@@ -130,7 +130,11 @@ export default function Home() {
 
   const displayServices = services.length > 0 ? services : [];
 
-  if (loading) return null;
+  if (loading) return (
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <div className="w-10 h-10 border-4 border-amber-500/30 border-t-amber-500 rounded-full animate-spin"></div>
+    </div>
+  );
 
   return (
     <div className="bg-zinc-950 text-zinc-100 font-sans selection:bg-amber-500 selection:text-black min-h-screen">

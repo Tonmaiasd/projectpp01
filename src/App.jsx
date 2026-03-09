@@ -1,7 +1,9 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useContext } from "react";
 import Layout from "./layouts/Layout";
 import UserProtectedRoute from "./routes/UserProtectedRoute";
 import AdminRoute from "./routes/AdminRoute";
+import { AuthContext } from "./context/AuthContext";
 
 // User Pages
 import Home from "./pages/Home";
@@ -19,6 +21,17 @@ import AdminPromotions from "./pages/admin/Promotions";
 import AdminHolidays from "./pages/admin/Holidays";
 import AdminComments from "./pages/admin/comments";
 
+// component สำหรับ redirect admin ไปหน้า admin อัตโนมัติ
+// ถ้ายัง loading อยู่ → รอ (ไม่ redirect ผิด)
+// ถ้า isAdmin → ไป /admin/dashboard
+// ถ้าไม่ใช่ → แสดงหน้าปกติ
+function AdminRedirect({ children }) {
+  const { isAdmin, loading } = useContext(AuthContext);
+  if (loading) return null;
+  if (isAdmin) return <Navigate to="/admin/dashboard" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -27,7 +40,12 @@ export default function App() {
 
       {/* --- User Routes (ลูกค้า) --- */}
       <Route element={<Layout />}>
-        <Route path="/" element={<Home />} />
+        {/* ถ้า admin เข้า "/" หรือ "/profile" → redirect ไป admin dashboard อัตโนมัติ */}
+        <Route path="/" element={
+          <AdminRedirect>
+            <Home />
+          </AdminRedirect>
+        } />
 
         {/* หน้า Booking เปิดให้ทุกคนเข้าดูได้ (เช็ค Login ตอนกดปุ่มจอง) */}
         <Route path="/booking" element={<Booking />} />
@@ -37,7 +55,9 @@ export default function App() {
           path="/profile"
           element={
             <UserProtectedRoute>
-              <Profile />
+              <AdminRedirect>
+                <Profile />
+              </AdminRedirect>
             </UserProtectedRoute>
           }
         />
