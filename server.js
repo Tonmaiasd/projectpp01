@@ -190,12 +190,73 @@ app.post('/api/notify-booking', async (req, res) => {
       return res.status(404).json({ error: 'ไม่พบรายการจองที่ระบุ' });
     }
 
-    // Reuse notification logic
-    await sendLineNotification(supabaseAdmin, booking);
+    // --- Manual notify limit & auto-cancel logic ---
+    // ใช้คอลัมน์ manual_notify_count (INTEGER, default 0) ในตาราง bookings
+    const currentCount = booking.manual_notify_count ?? 0;
+
+    // ถ้ากดครั้งที่ 3 ให้ "ยกเลิกคิวทันที"
+    // (currentCount เริ่มที่ 0; กดครั้งที่ 3 = currentCount === 2)
+    if (currentCount >= 2) {
+      const { error: cancelError } = await supabaseAdmin
+        .from('bookings')
+        .update({
+          status: 'Cancelled',
+          manual_notify_count: currentCount + 1,
+        })
+        .eq('id', finalId);
+
+      if (cancelError) {
+        return res.status(500).json({ error: 'ไม่สามารถยกเลิกคิวได้: ' + cancelError.message });
+      }
+
+      // ส่ง LINE แจ้งเตือนลูกค้าว่าคิวถูกยกเลิกเพราะไม่มีการตอบรับหลังจากเตือนหลายครั้ง
+      const cancelMsg =
+        `❌ แจ้งเตือนจากทางร้าน Lor Loei Cuts ครับ\n\n` +
+        `ระบบได้ทำการยกเลิกคิวของคุณ ${booking.customer_name} แล้ว เนื่องจากมีการแจ้งเตือนครบ 2 ครั้งและลูกค้ายังไม่มาใช้บริการภายในเวลาที่กำหนด`
+      try {
+        await sendLineNotification(supabaseAdmin, { ...booking, status: 'Cancelled' }, cancelMsg);
+      } catch (notifyErr) {
+        console.warn('Failed to send auto-cancel notification:', notifyErr.message);
+      }
+
+      notifyBookingUpdate();
+
+      return res.json({
+        success: true,
+        cancelled: true,
+        message: `ระบบยกเลิกคิวของคุณ ${booking.customer_name} (#${booking.id}) อัตโนมัติ (กดแจ้งเตือนครั้งที่ 3)`,
+        booking_id: booking.id,
+        customer_name: booking.customer_name
+      });
+    }
+
+    // ยังไม่เกิน 3 ครั้ง: เพิ่มตัวนับและส่งแจ้งเตือนตามปกติ
+    const nextCount = currentCount + 1;
+    const { error: updateError } = await supabaseAdmin
+      .from('bookings')
+      .update({ manual_notify_count: nextCount })
+      .eq('id', finalId);
+
+    if (updateError) {
+      return res.status(500).json({ error: 'ไม่สามารถบันทึกจำนวนครั้งที่แจ้งเตือนได้: ' + updateError.message });
+    }
+
+    // ส่ง LINE แจ้งเตือน พร้อมบอกว่าแอดมินกดแจ้งเตือนครั้งที่เท่าไหร่แล้ว
+    const adminNotifyMsg =
+      `🔔 แจ้งเตือนจากแอดมิน (ครั้งที่ ${nextCount})\n\n` +
+      `เรียนคุณ ${booking.customer_name}\n` +
+      `ใกล้ถึงเวลานัดสำหรับบริการ: ${booking.service_name}\n` +
+      `📅 วันที่: ${booking.booking_date}\n` +
+      `⏰ เวลา: ${booking.booking_time.slice(0, 5)} น.\n\n` +
+      `หากไม่สะดวกมาใช้บริการในเวลานี้ สามารถติดต่อร้านหรือทำการเลื่อนคิว / ยกเลิกคิวได้ครับ 🙏\n\n` +
+      `หมายเหตุ: หากมีการแจ้งเตือนครบ 2 ครั้งแล้วและภายใน 5 นาทีลูกค้ายังไม่มาใช้บริการ ระบบอาจทำการยกเลิกคิวครับ`;
+
+    await sendLineNotification(supabaseAdmin, booking, adminNotifyMsg);
 
     res.json({
       success: true,
-      message: `แจ้งเตือนคุณ ${booking.customer_name} (#${booking.id}) เรียบร้อยแล้ว`,
+      cancelled: false,
+      message: `แจ้งเตือนคุณ ${booking.customer_name} (#${booking.id}) เรียบร้อยแล้ว (ครั้งที่ ${nextCount})`,
       booking_id: booking.id,
       customer_name: booking.customer_name
     });

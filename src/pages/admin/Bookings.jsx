@@ -394,6 +394,7 @@ export default function Bookings() {
           status: b.status,
           user_id: b.user_id,
           applied_promo: b.applied_promo,
+          manual_notify_count: b.manual_notify_count ?? 0,
         }));
       setBookings(mapped);
       setLastUpdated(new Date());
@@ -1057,7 +1058,13 @@ export default function Bookings() {
             </div>
             <div className="flex items-center gap-3 text-sm font-bold mt-1">
               <div className="w-5 h-5 rounded-md bg-red-500/20 border border-red-500/40 shadow-[0_0_5px_rgba(239,68,68,0.2)]" />
-              <span className="text-red-400/80">สีแดงคือ ประกาศว่าร้านไม่ว่างและจะแจ้งเตือนไปยัง LINE ลูกค้า</span>
+              <span className="text-red-400/80">
+                สีแดงคือ ประกาศว่าร้านไม่ว่างและจะแจ้งเตือนไปยัง LINE ลูกค้า
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-sm font-bold">
+              <div className="w-5 h-5 rounded-md bg-zinc-800 border border-white/10" />
+              <span className="text-zinc-400">หากกดปุ่มแจ้งเตือนเกิน 2 ครั้ง ระบบจะทำการยกเลิกคิว</span>
             </div>
           </div>
         </div>
@@ -1081,10 +1088,12 @@ export default function Bookings() {
                     const isToday = booking.date === todayStr;
                     const isPastDate = booking.date < todayStr;
                     const [bHour, bMin] = booking.time.split(":").map(Number);
-                    const hasTimeReached = now.getHours() > bHour || (now.getHours() === bHour && now.getMinutes() >= bMin);
+                    const hasTimeReached =
+                      now.getHours() > bHour ||
+                      (now.getHours() === bHour && now.getMinutes() >= bMin);
                     const canMarkCompleted = isPastDate || (isToday && hasTimeReached);
 
-                    // แจ้งเตือนได้ก่อนถึงเวลา 15 นาที
+                    // แจ้งเตือนได้ก่อนถึงเวลา 15 นาที (หรือถ้าเป็นวันที่ที่ผ่านมาแล้ว)
                     const slotTime = new Date();
                     slotTime.setHours(bHour, bMin, 0, 0);
                     const minutesUntilSlot = (slotTime - now) / (1000 * 60);
@@ -1199,6 +1208,9 @@ export default function Bookings() {
                               <MessageSquareText size={24} />
                               <span className="text-[9px] font-black uppercase tracking-widest">
                                 แจ้งเตือน
+                              </span>
+                              <span className="text-[10px] font-semibold tracking-tight mt-0.5">
+                                กดแล้ว {booking.manual_notify_count ?? 0} ครั้ง
                               </span>
                             </button>
 
