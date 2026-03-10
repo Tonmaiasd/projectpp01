@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit3, Trash2, Clock, DollarSign, X, Check, Save, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Plus, Edit3, Trash2, Clock, DollarSign, X, Check, Save, Loader2, Upload, Link, ImageIcon } from 'lucide-react';
 import { supabase } from '../../supabase/client';
 import Pagination from '../../components/Pagination';
 import { io } from "socket.io-client";
@@ -16,6 +16,9 @@ export default function Services() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentService, setCurrentService] = useState(null); // ถ้าเป็น null คือโหมด Add, ถ้ามีค่าคือโหมด Edit
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [imgMode, setImgMode] = useState('upload'); // 'upload' | 'url'
+  const fileInputRef = useRef(null);
   const [servicesPage, setServicesPage] = useState(1); // Pagination
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
   const [confirmDelete, setConfirmDelete] = useState(null); // ID of service to delete
@@ -27,8 +30,7 @@ export default function Services() {
     duration_minutes: '30',
     category: '',
     img_url: '',
-    description: '',
-    rating: 4.5
+    description: ''
   });
 
   const showNotification = (message, type = 'success') => {
@@ -84,6 +86,7 @@ export default function Services() {
       description: '',
       rating: 4.5
     });
+    setImgMode('upload');
     setIsModalOpen(true);
   };
 
@@ -96,15 +99,52 @@ export default function Services() {
       duration_minutes: service.duration_minutes || '30',
       category: service.category || '',
       img_url: service.img_url || '',
-      description: service.description || '',
-      rating: service.rating || 4.5
+      description: service.description || ''
     });
+    setImgMode(service.img_url ? 'url' : 'upload');
     setIsModalOpen(true);
   };
 
   // ลบบริการ
   const handleDelete = (id) => {
     setConfirmDelete(id);
+  };
+
+  // อัพโหลดรูปจากเครื่องไปยัง Supabase Storage
+  const handleFileUpload = async (file) => {
+    if (!file) return;
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!allowed.includes(file.type)) {
+      showNotification('รองรับเฉพาะไฟล์ JPG, PNG, WEBP, GIF เท่านั้น', 'error');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showNotification('ไฟล์ต้องมีขนาดไม่เกิน 5 MB', 'error');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const fileName = `service_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('service-images')
+        .upload(fileName, file, { upsert: true, contentType: file.type });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage
+        .from('service-images')
+        .getPublicUrl(fileName);
+
+      setFormData(prev => ({ ...prev, img_url: urlData.publicUrl }));
+      showNotification('อัพโหลดรูปสำเร็จ', 'success');
+    } catch (err) {
+      console.error('Upload error:', err);
+      showNotification('อัพโหลดรูปไม่สำเร็จ: ' + err.message, 'error');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const executeDelete = async (id) => {
@@ -150,8 +190,7 @@ export default function Services() {
         duration_minutes: Number(formData.duration_minutes) || null,
         category: formData.category || null,
         img_url: formData.img_url || null,
-        description: formData.description || null,
-        rating: Number(formData.rating) || null
+        description: formData.description || null
       };
 
       if (currentService) {
@@ -194,8 +233,7 @@ export default function Services() {
         duration_minutes: '30',
         category: '',
         img_url: '',
-        description: '',
-        rating: 4.5
+        description: ''
       });
     } catch (err) {
       if (err.message?.includes('row-level security')) {
@@ -412,37 +450,90 @@ export default function Services() {
                 </select>
               </div>
               <div>
-                <label className="text-sm text-zinc-400 mb-1 block">URL รูปภาพ</label>
-                <input
-                  type="text"
-                  value={formData.img_url}
-                  onChange={e => setFormData({ ...formData, img_url: e.target.value })}
-                  placeholder="https://example.com/image.jpg"
-                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none text-xs"
-                />
-                {formData.img_url && (
-                  <div className="mt-2 h-32 rounded-lg overflow-hidden border border-white/10">
-                    <img src={formData.img_url} alt="Preview" className="w-full h-full object-cover" />
+                <label className="text-sm text-zinc-400 mb-2 block">รูปภาพบริการ</label>
+
+                {/* Mode Toggle */}
+                <div className="flex p-1 bg-zinc-950 rounded-xl border border-white/5 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setImgMode('upload')}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${imgMode === 'upload' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                  >
+                    <Upload size={13} /> อัพโหลดจากเครื่อง
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImgMode('url')}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${imgMode === 'url' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'
+                      }`}
+                  >
+                    <Link size={13} /> วาง URL
+                  </button>
+                </div>
+
+                {imgMode === 'upload' ? (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files[0];
+                      if (file) handleFileUpload(file);
+                    }}
+                    className="relative w-full h-36 border-2 border-dashed border-white/10 hover:border-amber-500/50 rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer transition-all group bg-zinc-950/50 hover:bg-zinc-950"
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 size={28} className="text-amber-500 animate-spin" />
+                        <p className="text-xs text-zinc-400">กำลังอัพโหลด...</p>
+                      </>
+                    ) : formData.img_url ? (
+                      <>
+                        <img src={formData.img_url} alt="preview" className="absolute inset-0 w-full h-full object-cover rounded-xl opacity-60" />
+                        <div className="relative z-10 flex flex-col items-center gap-1">
+                          <Upload size={20} className="text-white" />
+                          <p className="text-xs text-white font-bold">คลิกเพื่อเปลี่ยนรูป</p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon size={28} className="text-zinc-600 group-hover:text-amber-500 transition-colors" />
+                        <p className="text-xs text-zinc-400 font-bold">คลิกหรือลากรูปมาวางที่นี่</p>
+                        <p className="text-[10px] text-zinc-600">JPG, PNG, WEBP, GIF &bull; ไม่เกิน 5 MB</p>
+                      </>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) handleFileUpload(file);
+                        e.target.value = '';
+                      }}
+                    />
                   </div>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      value={formData.img_url}
+                      onChange={e => setFormData({ ...formData, img_url: e.target.value })}
+                      placeholder="https://example.com/image.jpg"
+                      className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none text-xs"
+                    />
+                    {formData.img_url && (
+                      <div className="mt-2 h-32 rounded-lg overflow-hidden border border-white/10">
+                        <img src={formData.img_url} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
               <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="text-sm text-zinc-400 mb-1 block">คะแนน (0-5)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="5"
-                    value={formData.rating}
-                    onChange={e => setFormData({ ...formData, rating: e.target.value })}
-                    placeholder="4.5"
-                    className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none font-num"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 flex gap-3">
+              </div>              <div className="pt-4 flex gap-3">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}

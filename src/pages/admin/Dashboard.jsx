@@ -10,6 +10,7 @@ export default function Dashboard() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [totalUsers, setTotalUsers] = useState(0);
 
   const [realtimeStatus, setRealtimeStatus] = useState('connecting');
   const [period, setPeriod] = useState('daily'); // 'daily' | 'monthly' | 'yearly'
@@ -37,13 +38,19 @@ export default function Dashboard() {
         id: b.id,
         customer: b.customer_name || (b.user_id ? String(b.user_id).slice(0, 8) + '…' : '-'),
         service: b.service_name,
-        time: `${b.booking_date || ''} ${b.booking_time || ''}`.trim(),
+        time: `${b.booking_date ? b.booking_date.split('-').reverse().join('-') : ''} ${b.booking_time ? b.booking_time.slice(0, 5) : ''}`.trim(),
         status: b.status || 'Pending',
         price: b.price || 0,
         date: b.booking_date,
       }));
 
       setBookings(mapped);
+
+      // ดึงจำนวนลูกค้าทั้งหมดจากตาราง profiles
+      const { count: usersCount } = await supabase
+        .from('profiles')
+        .select('id', { count: 'exact', head: true });
+      setTotalUsers(usersCount ?? 0);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError(err.message);
@@ -91,12 +98,12 @@ export default function Dashboard() {
 
     if (period === 'daily') {
       filtered = bookings.filter(b => b.date === selectedDate);
-      periodLabel = selectedDate === new Date().toLocaleDateString('en-CA') ? "วันนี้" : selectedDate;
-      subLabel = `วันที่ ${selectedDate}`;
+      periodLabel = selectedDate === new Date().toLocaleDateString('en-CA') ? "วันนี้" : selectedDate.split('-').reverse().join('-');
+      subLabel = `วันที่ ${selectedDate.split('-').reverse().join('-')}`;
     } else if (period === 'monthly') {
       filtered = bookings.filter(b => b.date && b.date.startsWith(selectedMonth));
-      periodLabel = selectedMonth === new Date().toLocaleDateString('en-CA').slice(0, 7) ? "เดือนนี้" : selectedMonth;
-      subLabel = `เดือน ${selectedMonth}`;
+      periodLabel = selectedMonth === new Date().toLocaleDateString('en-CA').slice(0, 7) ? "เดือนนี้" : selectedMonth.split('-').reverse().join('-');
+      subLabel = `เดือน ${selectedMonth.split('-').reverse().join('-')}`;
     } else {
       filtered = bookings.filter(b => b.date && b.date.startsWith(selectedYear));
       periodLabel = selectedYear === new Date().getFullYear().toString() ? "ปีนี้" : selectedYear;
@@ -135,7 +142,7 @@ export default function Dashboard() {
       },
       {
         title: "ลูกค้าทั้งหมด (ในระบบ)",
-        value: bookings.filter(b => b.user_id).length.toString(),
+        value: totalUsers.toLocaleString(),
         icon: Users,
         color: "text-blue-500",
         bg: "bg-blue-500/10",
@@ -144,7 +151,7 @@ export default function Dashboard() {
     ];
 
     return { stats: statsData, filteredBookings: filtered, subLabel };
-  }, [bookings, period, selectedDate, selectedMonth, selectedYear, statusFilter]);
+  }, [bookings, totalUsers, period, selectedDate, selectedMonth, selectedYear, statusFilter]);
 
   // Pagination for dashboard bookings
   const ITEMS_PER_PAGE = 10;

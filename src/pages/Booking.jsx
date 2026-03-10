@@ -104,15 +104,12 @@ export default function Booking() {
     };
   }, [bookingData.date]);
 
-  // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 30 นาที)
+  // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 1 ชั่วโมง)
   const timeSlots = useMemo(() => {
     const slots = [];
     for (let hour = 9; hour <= 20; hour++) {
       const hStr = hour.toString().padStart(2, '0');
       slots.push(`${hStr}:00`);
-      if (hour < 20) {
-        slots.push(`${hStr}:30`);
-      }
     }
     return slots;
   }, []);
@@ -571,7 +568,6 @@ export default function Booking() {
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {[
               { id: 'recommended', label: 'แนะนำ' },
-              { id: 'rating', label: 'คะแนนสูงสุด' },
               { id: 'price_asc', label: 'ราคา (ต่ำ-สูง)' },
               { id: 'price_desc', label: 'ราคา (สูง-ต่ำ)' },
             ].map((opt) => (
@@ -649,11 +645,6 @@ export default function Booking() {
                           {pkg.badge}
                         </span>
                       )}
-                    </div>
-                    <div className="absolute bottom-3 right-3 bg-black/70 backdrop-blur-sm px-2 py-1 rounded-lg flex items-center gap-1 text-xs font-bold shadow-sm border border-white/10">
-                      <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
-                      <span className="text-white font-num">{pkg.rating}</span>
-                      <span className="text-zinc-400 font-normal font-num">({pkg.reviews})</span>
                     </div>
                   </div>
 
@@ -864,7 +855,7 @@ export default function Booking() {
                                       : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
                                 }`}
                             >
-                              {isAdminBusy ? 'ไม่ว่าง' : (isPast ? 'เกินเวลาจอง' : slot)}
+                              {isAdminBusy ? 'ไม่ว่าง' : isPast && !isBooked ? 'เกินเวลาจอง' : slot}
                             </button>
                           );
                         })}
@@ -881,10 +872,9 @@ export default function Booking() {
                       </label>
                       <input
                         type="text"
-                        placeholder="ระบุชื่อของคุณ"
                         value={bookingData.name}
-                        onChange={(e) => setBookingData({ ...bookingData, name: e.target.value })}
-                        className="w-full bg-zinc-800 border border-white/10 rounded-xl p-3 focus:ring-2 focus:ring-amber-500 outline-none placeholder:text-zinc-600 text-white"
+                        disabled
+                        className="w-full bg-zinc-900 border border-white/5 rounded-xl p-3 text-zinc-500 cursor-not-allowed outline-none select-none"
                       />
                     </div>
                   </div>
@@ -892,7 +882,7 @@ export default function Booking() {
                   {/* Promotion Selector */}
                   <div className="space-y-4 pt-4 border-t border-white/10">
                     <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-amber-500" /> โปรโมชั่น (ถ้ามี)
+                      <Sparkles className="w-4 h-4 text-amber-500" /> โปรโมชั่น (ถ้ามี) *สามารถใช้โปรโมชั่นได้เพียง 1 ครั้งต่อสมาชิก
                     </label>
                     <div className="flex flex-col gap-2">
                       <button

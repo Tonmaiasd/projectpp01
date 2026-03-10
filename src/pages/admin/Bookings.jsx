@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useMemo, useContext, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom"; // 1. Import useNavigate
 import {
-  Search,
-  Filter,
-  MoreHorizontal,
   CheckCircle,
   XCircle,
   Clock,
@@ -20,7 +17,7 @@ import {
   ChevronRight,
   Scissors,
   Trash2,
-} from "lucide-react"; // เพิ่ม ChevronLeft, ChevronRight, Scissors, Trash2
+} from "lucide-react";
 import { supabase } from "../../supabase/client";
 import { AuthContext } from "../../context/AuthContext";
 import { io } from "socket.io-client";
@@ -64,17 +61,6 @@ export default function Bookings() {
     phone: "",
   });
 
-  // --- State สำหรับ Modal แอดมินไม่ว่าง/ปิดร้าน ---
-  const [showBusyModal, setShowBusyModal] = useState(false);
-  const [busyForm, setBusyForm] = useState({
-    mode: "range",
-    date: new Date().toLocaleDateString('en-CA'),
-    endDate: new Date().toLocaleDateString('en-CA'),
-    startTime: "13:00",
-    endTime: "15:00",
-  });
-  const [isProcessingBusy, setIsProcessingBusy] = useState(false);
-
   // --- State สำหรับ Custom Confirmation Modal ---
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({
@@ -84,22 +70,12 @@ export default function Bookings() {
     type: "warning", // 'warning' | 'danger' | 'info'
   });
 
-  // คำนวณวันที่สูงสุดที่เลือกได้ (2 สัปดาห์จากวันนี้)
-  const maxClosureDate = useMemo(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 14);
-    return d.toLocaleDateString('en-CA');
-  }, []);
-
   // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 30 นาที)
   const timeSlots = useMemo(() => {
     const slots = [];
     for (let hour = 9; hour <= 20; hour++) {
       const hStr = hour.toString().padStart(2, "0");
       slots.push(`${hStr}:00`);
-      if (hour < 20) {
-        slots.push(`${hStr}:30`);
-      }
     }
     return slots;
   }, []);
@@ -143,6 +119,19 @@ export default function Bookings() {
       (a, b) =>
         (priorityOrder[a.status] ?? 99) - (priorityOrder[b.status] ?? 99),
     )[0];
+  };
+
+  // Helper: เช็คว่า slot นี้ถูก admin ปิด/ไม่ว่างหรือไม่
+  const isSlotBusy = (time) => {
+    return adminBusySlots.some((busy) => {
+      if (busy.is_full_day) return true;
+      const normalize = (t) => t.split(":").slice(0, 2).join(":");
+      const currentT = normalize(time);
+      return (
+        currentT >= normalize(busy.start_time) &&
+        currentT <= normalize(busy.end_time)
+      );
+    });
   };
 
   // --- Reschedule Logic ---
@@ -902,21 +891,6 @@ export default function Bookings() {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => {
-              setBusyForm((prev) => ({
-                ...prev,
-                date: selectedDate,
-                endDate: selectedDate,
-              }));
-              setShowBusyModal(true);
-            }}
-            className="bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all flex items-center gap-1.5 active:scale-95"
-          >
-            <Clock size={18} /> ประกาศไม่ว่าง/ปิดร้าน
-          </button>
-
-          {/* ปุ่มเปิด Modal */}
-          <button
-            onClick={() => {
               setWalkInForm(prev => ({
                 ...prev,
                 date: selectedDate,
@@ -1110,6 +1084,12 @@ export default function Bookings() {
                     const hasTimeReached = now.getHours() > bHour || (now.getHours() === bHour && now.getMinutes() >= bMin);
                     const canMarkCompleted = isPastDate || (isToday && hasTimeReached);
 
+                    // แจ้งเตือนได้ก่อนถึงเวลา 15 นาที
+                    const slotTime = new Date();
+                    slotTime.setHours(bHour, bMin, 0, 0);
+                    const minutesUntilSlot = (slotTime - now) / (1000 * 60);
+                    const canNotify = isPastDate || (isToday && minutesUntilSlot <= 15);
+
                     return (
                       <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden group">
                         {/* Background Decor */}
@@ -1169,7 +1149,7 @@ export default function Bookings() {
                                 </span>
                               </div>
                               <p className="mt-2 text-zinc-400 text-sm font-bold px-1">
-                                {booking.date}
+                                {booking.date ? booking.date.split('-').reverse().join('-') : booking.date}
                               </p>
                             </div>
 
@@ -1210,8 +1190,8 @@ export default function Bookings() {
 
                             <button
                               onClick={() => handleNotifyBooking(booking.id)}
-                              disabled={booking.status !== "Pending" || !canMarkCompleted}
-                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${booking.status === "Pending" && canMarkCompleted
+                              disabled={booking.status !== "Pending" || !canNotify}
+                              className={`h-20 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 border-2 ${booking.status === "Pending" && canNotify
                                 ? "bg-sky-500/5 border-sky-500/20 text-sky-400 hover:bg-sky-500 hover:text-white shadow-xl hover:shadow-sky-500/20"
                                 : "bg-zinc-800/50 border-zinc-700/30 text-zinc-600 opacity-40 cursor-not-allowed"
                                 }`}
@@ -1284,6 +1264,20 @@ export default function Bookings() {
                         </div>
                       </div>
                     );
+                  } else if (isSlotBusy(selectedSlot)) {
+                    return (
+                      <div className="bg-red-950/20 border-2 border-dashed border-red-500/30 rounded-[3rem] p-20 flex flex-col items-center justify-center text-center transition-all duration-500 h-full">
+                        <div className="w-24 h-24 bg-red-500/10 border-2 border-red-500/30 rounded-full flex items-center justify-center mb-6">
+                          <XCircle size={40} className="text-red-500" />
+                        </div>
+                        <h3 className="text-3xl font-black text-red-400 mb-3 uppercase tracking-tight">
+                          ปิดร้าน
+                        </h3>
+                        <p className="text-red-500/60 text-sm font-bold uppercase tracking-widest">
+                          ช่วงเวลานี้ถูกประกาศปิด / ไม่ว่าง
+                        </p>
+                      </div>
+                    );
                   } else {
                     return (
                       <div className="bg-zinc-900/30 border-2 border-dashed border-white/5 rounded-[3rem] p-20 flex flex-col items-center justify-center text-center group hover:bg-zinc-900/50 transition-all duration-500 h-full">
@@ -1293,20 +1287,6 @@ export default function Bookings() {
                         <h3 className="text-3xl font-black text-white mb-8 uppercase tracking-tight">
                           เวลานี้ยังว่างอยู่
                         </h3>
-
-                        {/* <button
-                          onClick={() => {
-                            setWalkInForm(prev => ({
-                              ...prev,
-                              date: selectedDate,
-                              time: selectedSlot
-                            }));
-                            setShowWalkInModal(true);
-                          }}
-                          className="bg-white text-black px-12 py-5 rounded-2xl font-black text-xl hover:bg-amber-500 transition-all active:scale-95 shadow-2xl flex items-center gap-3"
-                        >
-                          <Plus size={28} /> เพิ่มการจอง Walk-in
-                        </button> */}
                       </div>
                     );
                   }
@@ -1767,178 +1747,7 @@ export default function Bookings() {
       )
       }
 
-      {/* --- Busy/Closure Modal --- */}
-      {
-        showBusyModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="bg-zinc-900 w-full max-w-md rounded-2xl border border-white/10 shadow-2xl p-6 animate-[slideUp_0.3s_ease-out]">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                  <Clock size={20} className="text-red-500" />{" "}
-                  ประกาศไม่ว่าง/ปิดร้าน
-                </h3>
-                <button
-                  onClick={() => setShowBusyModal(false)}
-                  className="text-zinc-500 hover:text-white transition-colors"
-                >
-                  <X size={24} />
-                </button>
-              </div>
 
-              <form onSubmit={handleBusySubmit} className="space-y-6">
-                <div className="bg-red-500/5 border border-red-500/10 p-4 rounded-xl">
-                  <p className="text-red-400 text-xs leading-relaxed flex items-start gap-2">
-                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                    การแจ้งไม่ว่างจะทำการยกเลิกคิว (Pending)
-                    ทั้งหมดในช่วงเวลาที่เลือก และส่งข้อความ LINE
-                    แจ้งลูกค้าโดยอัตโนมัติ
-                  </p>
-                </div>
-
-                <div className="flex p-1 bg-zinc-950 rounded-xl border border-white/5">
-                  <button
-                    type="button"
-                    onClick={() => setBusyForm({ ...busyForm, mode: "range" })}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === "range" ? "bg-zinc-800 text-white border border-white/10 shadow-sm" : "text-zinc-500 hover:text-zinc-400"}`}
-                  >
-                    ระบุช่วงเวลา
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBusyForm({ ...busyForm, mode: "full" })}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === "full" ? "bg-zinc-800 text-white border border-white/10 shadow-sm" : "text-zinc-500 hover:text-zinc-400"}`}
-                  >
-                    หยุดร้าน
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBusyForm({ ...busyForm, mode: "multi" })}
-                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${busyForm.mode === "multi" ? "bg-zinc-800 text-white border border-white/10 shadow-sm" : "text-zinc-500 hover:text-zinc-400"}`}
-                  >
-                    หยุดหลายวัน
-                  </button>
-                </div>
-
-                {busyForm.mode === "multi" ? (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm text-zinc-400 mb-2 block">
-                        เริ่มหยุดวันที่
-                      </label>
-                      <input
-                        type="date"
-                        value={busyForm.date}
-                        min={new Date().toLocaleDateString('en-CA')}
-                        max={maxClosureDate}
-                        onChange={(e) =>
-                          setBusyForm({ ...busyForm, date: e.target.value })
-                        }
-                        className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm text-zinc-400 mb-2 block">
-                        หยุดถึงวันที่
-                      </label>
-                      <input
-                        type="date"
-                        value={busyForm.endDate}
-                        min={busyForm.date}
-                        max={maxClosureDate}
-                        onChange={(e) =>
-                          setBusyForm({ ...busyForm, endDate: e.target.value })
-                        }
-                        className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <label className="text-sm text-zinc-400 mb-2 block">
-                      วันที่ดำเนินการ
-                    </label>
-                    <input
-                      type="date"
-                      value={busyForm.date}
-                      min={new Date().toLocaleDateString('en-CA')}
-                      max={maxClosureDate}
-                      onChange={(e) =>
-                        setBusyForm({ ...busyForm, date: e.target.value })
-                      }
-                      className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white font-num focus:border-red-500/50 outline-none scheme-dark"
-                    />
-                  </div>
-                )}
-
-                {busyForm.mode === "range" && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-sm text-zinc-400 mb-2 block">
-                        เวลาเริ่มต้น
-                      </label>
-                      <select
-                        value={busyForm.startTime}
-                        onChange={(e) =>
-                          setBusyForm({ ...busyForm, startTime: e.target.value })
-                        }
-                        className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-red-500/50 outline-none font-num"
-                      >
-                        {timeSlots.map((slot) => (
-                          <option key={slot} value={slot}>
-                            {slot}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-sm text-zinc-400 mb-2 block">
-                        เวลาสิ้นสุด
-                      </label>
-                      <select
-                        value={busyForm.endTime}
-                        onChange={(e) =>
-                          setBusyForm({ ...busyForm, endTime: e.target.value })
-                        }
-                        className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-red-500/50 outline-none font-num"
-                      >
-                        {timeSlots.map((slot) => (
-                          <option key={slot} value={slot}>
-                            {slot}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                <div className="pt-4 flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowBusyModal(false)}
-                    className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold transition-colors"
-                  >
-                    ยกเลิก
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isProcessingBusy}
-                    className="flex-2 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-colors shadow-lg shadow-red-600/20 flex items-center justify-center gap-2"
-                  >
-                    {isProcessingBusy ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
-                        กำลังดำเนินการ...
-                      </>
-                    ) : (
-                      "ยืนยันประกาศไม่ว่าง"
-                    )}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )
-      }
 
       {/* --- Custom Confirmation Modal (Card Style) --- */}
       {

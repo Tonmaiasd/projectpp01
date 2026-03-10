@@ -32,7 +32,7 @@ export default function AdminLayout() {
   ];
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans flex selection:bg-amber-500 selection:text-black">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans flex selection:bg-amber-500 selection:text-black overflow-x-hidden w-full max-w-[100vw]">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Manrope:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap');
         .font-serif { font-family: 'Playfair Display', serif; }

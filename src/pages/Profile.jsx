@@ -325,15 +325,12 @@ export default function Profile() {
     }
   }, [rescheduleData.date, refreshToggle]);
 
-  // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 30 นาที)
+  // รายการเวลาที่มีให้เลือก (09:00 - 20:00 ทุก 1 ชั่วโมง)
   const timeSlots = useMemo(() => {
     const slots = [];
     for (let hour = 9; hour <= 20; hour++) {
       const hStr = hour.toString().padStart(2, '0');
       slots.push(`${hStr}:00`);
-      if (hour < 20) {
-        slots.push(`${hStr}:30`);
-      }
     }
     return slots;
   }, []);
@@ -786,7 +783,7 @@ export default function Profile() {
             </div>
             <p className="text-zinc-400 text-sm mb-2">โดยช่าง: <span className="text-white">{booking.barber_name}</span></p>
             <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
-              <span className="flex items-center gap-1 font-num bg-zinc-900 px-2 py-1 rounded border border-white/5"><Calendar size={12} /> {booking.booking_date}</span>
+              <span className="flex items-center gap-1 font-num bg-zinc-900 px-2 py-1 rounded border border-white/5"><Calendar size={12} /> {booking.booking_date?.split('-').reverse().join('-')}</span>
               <span className="flex items-center gap-1 font-num bg-zinc-900 px-2 py-1 rounded border border-white/5"><Clock size={12} /> {booking.booking_time} น.</span>
             </div>
           </div>
@@ -912,13 +909,6 @@ export default function Profile() {
                     <div>
                       <p className="text-xs text-zinc-500 uppercase font-bold">เบอร์โทรศัพท์</p>
                       <p className="text-zinc-300 text-sm font-num">{profile.phone}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-3">
-                    <MapPin className="w-5 h-5 text-zinc-500 mt-0.5" />
-                    <div>
-                      <p className="text-xs text-zinc-500 uppercase font-bold">ที่อยู่</p>
-                      <p className="text-zinc-300 text-sm leading-relaxed">{profile.address}</p>
                     </div>
                   </div>
                 </div>
@@ -1088,16 +1078,6 @@ export default function Profile() {
                   <p className="text-red-400 text-xs mt-2">⚠️ กรุณากรอกเบอร์โทรศัพท์ 10 หลัก</p>
                 )}
               </div>
-              <div>
-                <label className="text-sm font-bold text-zinc-400 mb-2 block">ที่อยู่</label>
-                <textarea
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  rows="3"
-                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-amber-500 outline-none transition-colors resize-none"
-                />
-              </div>
               {/* --- NOTIFICATION MODAL --- */}
               {notification.show && (
                 <div className="fixed inset-0 z-100 flex items-center justify-center p-6 sm:p-4">
@@ -1148,353 +1128,364 @@ export default function Profile() {
 
           </div>
         </div>
-      )}
+      )
+      }
 
       {/* --- Save Confirmation Modal --- */}
-      {showSaveConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
-          <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl p-8 text-center animate-[slideUp_0.3s_ease-out]">
-            <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertCircle size={40} />
-            </div>
-
-            <h3 className="text-2xl font-serif font-bold text-white mb-2">ยืนยันการบันทึก?</h3>
-            <p className="text-zinc-400 text-sm mb-2 leading-relaxed">
-              คุณต้องการบันทึกข้อมูลส่วนตัวใหม่ใช่หรือไม่?
-            </p>
-            {profile.phone !== formData.phone && (
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 mt-4">
-                <p className="text-amber-500 text-xs font-bold leading-relaxed">
-                  ⚠️ คุณได้เปลี่ยนเบอร์โทรศัพท์<br />
-                  กรุณาใช้เบอร์ใหม่ในการ Login ครั้งถัดไป
-                </p>
+      {
+        showSaveConfirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
+            <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl p-8 text-center animate-[slideUp_0.3s_ease-out]">
+              <div className="w-20 h-20 bg-amber-500/20 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <AlertCircle size={40} />
               </div>
-            )}
 
-            <div className="flex flex-col gap-3 mt-6">
-              <button
-                disabled={isSaving}
-                onClick={handleSave}
-                className="w-full py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2"
-              >
-                {isSaving ? (
-                  <>
-                    <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
-                    <span>กำลังบันทึก...</span>
-                  </>
-                ) : (
-                  <>
-                    <Save size={18} />
-                    ยืนยันการบันทึก
-                  </>
-                )}
-              </button>
-              <button
-                disabled={isSaving}
-                onClick={() => setShowSaveConfirmModal(false)}
-                className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
-              >
-                ยกเลิก
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- Reschedule Modal --- */}
-      {showRescheduleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
-          <div className="bg-zinc-900 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out]">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-2xl font-serif font-bold text-white flex items-center gap-3">
-                <CalendarClock className="text-amber-500" size={24} /> เลื่อนคิวจอง
-              </h3>
-              <button
-                onClick={() => setShowRescheduleModal(false)}
-                className="text-zinc-500 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="mb-6 flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-              <AlertCircle size={14} className="text-amber-500" />
-              <p className="text-xs font-bold text-amber-500">
-                คุณเหลือสิทธิ์ในการเลื่อนอีก: <span className="text-white bg-amber-500 px-1.5 py-0.5 rounded ml-1">{2 - (activeBookings.find(b => b.id === rescheduleData.bookingId)?.reschedule_count || 0)}</span> ครั้ง
+              <h3 className="text-2xl font-serif font-bold text-white mb-2">ยืนยันการบันทึก?</h3>
+              <p className="text-zinc-400 text-sm mb-2 leading-relaxed">
+                คุณต้องการบันทึกข้อมูลส่วนตัวใหม่ใช่หรือไม่?
               </p>
-            </div>
-
-            <div className="space-y-6">
-              {/* Current Booking Summary */}
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex gap-4 items-center">
-                <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center text-black shrink-0">
-                  <Scissors size={24} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider mb-0.5">คิวปัจจุบันของคุณ</p>
-                  <h4 className="text-white font-bold truncate">{rescheduleData.serviceName}</h4>
-                  <p className="text-zinc-400 text-xs font-num">
-                    {new Date(rescheduleData.currentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} • {rescheduleData.currentTime} น.
+              {profile.phone !== formData.phone && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 mt-4">
+                  <p className="text-amber-500 text-xs font-bold leading-relaxed">
+                    ⚠️ คุณได้เปลี่ยนเบอร์โทรศัพท์<br />
+                    กรุณาใช้เบอร์ใหม่ในการ Login ครั้งถัดไป
                   </p>
-                </div>
-              </div>
-
-              {/* Date Selection */}
-              <div>
-                {/* Date Display (Read-only: same-day only) */}
-                <div>
-                  <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
-                    <Calendar size={16} /> วันที่ดำเนินการ (เลื่อนได้เฉพาะวันเดิม)
-                  </label>
-                  <div className="w-full bg-zinc-950/50 border border-white/5 rounded-2xl px-5 py-4 text-amber-500 font-num">
-                    {rescheduleData.date}
-                  </div>
-                  <p className="text-[10px] text-amber-500/50 mt-1.5">* ขณะนี้อนุญาตให้เลื่อนคิวได้เฉพาะภายในวันที่เลือกไว้เดิมเท่านั้นครับ</p>
-                </div>
-              </div>
-
-              {/* Time Selection */}
-              {rescheduleData.date && (
-                <div className="animate-[fadeIn_0.3s_ease-out]">
-                  <label className="text-sm font-bold text-zinc-400 mb-3 flex items-center gap-2">
-                    <Clock size={16} /> เลือกเวลาใหม่
-                  </label>
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-62.5 overflow-y-auto pr-2 scrollbar-hide">
-                    {timeSlots.map(slot => {
-                      const isBooked = rescheduleBookedSlots.some(bTime => bTime && bTime.startsWith(slot));
-                      const isBusy = rescheduleAdminBusySlots.some(busy => {
-                        if (busy.is_full_day) return true;
-                        return slot >= busy.start_time.slice(0, 5) && slot <= busy.end_time.slice(0, 5);
-                      });
-                      const now = new Date();
-                      const todayStr = now.toLocaleDateString('en-CA');
-                      const [curH, curM] = [now.getHours(), now.getMinutes()];
-                      const [slotH, slotM] = slot.split(':').map(Number);
-                      const isPast = rescheduleData.date === todayStr && (slotH < curH || (slotH === curH && slotM <= curM));
-
-                      const isDisabled = isBooked || isBusy || isPast;
-
-                      return (
-                        <button
-                          key={slot}
-                          disabled={isDisabled}
-                          onClick={() => setRescheduleData({ ...rescheduleData, time: slot })}
-                          className={`py-2.5 rounded-xl text-sm font-num font-bold transition-all border ${rescheduleData.time === slot
-                            ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] scale-105 z-10'
-                            : isBusy
-                              ? 'bg-red-500/10 text-red-500 border-red-500/20 cursor-not-allowed opacity-40'
-                              : isBooked
-                                ? 'bg-amber-500/10 text-amber-500/50 border-amber-500/20 cursor-not-allowed opacity-40'
-                                : isPast
-                                  ? 'bg-zinc-900 text-zinc-600 border-white/5 cursor-not-allowed opacity-30'
-                                  : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
-                            }`}
-                        >
-                          {isBusy ? 'ไม่ว่าง' : slot}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[10px] text-zinc-500 mt-3">* พักตามรอบการบริการของร้าน</p>
                 </div>
               )}
 
-              {/* Footer Buttons */}
-              <div className="pt-4 flex gap-4">
+              <div className="flex flex-col gap-3 mt-6">
+                <button
+                  disabled={isSaving}
+                  onClick={handleSave}
+                  className="w-full py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2"
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
+                      <span>กำลังบันทึก...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={18} />
+                      ยืนยันการบันทึก
+                    </>
+                  )}
+                </button>
+                <button
+                  disabled={isSaving}
+                  onClick={() => setShowSaveConfirmModal(false)}
+                  className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
+                >
+                  ยกเลิก
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* --- Reschedule Modal --- */}
+      {
+        showRescheduleModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
+            <div className="bg-zinc-900 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out]">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-2xl font-serif font-bold text-white flex items-center gap-3">
+                  <CalendarClock className="text-amber-500" size={24} /> เลื่อนคิวจอง
+                </h3>
                 <button
                   onClick={() => setShowRescheduleModal(false)}
-                  className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
+                  className="text-zinc-500 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full"
                 >
-                  ยกเลิก
+                  <X size={24} />
                 </button>
-                <button
-                  disabled={!rescheduleData.time || rescheduleLoading}
-                  onClick={handleRescheduleSubmit}
-                  className="flex-1 py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2"
-                >
-                  {rescheduleLoading ? (
-                    <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
-                  ) : (
-                    <>ยืนยันการเลื่อน</>
-                  )}
-                </button>
+              </div>
+
+              <div className="mb-6 flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <AlertCircle size={14} className="text-amber-500" />
+                <p className="text-xs font-bold text-amber-500">
+                  คุณเหลือสิทธิ์ในการเลื่อนอีก: <span className="text-white bg-amber-500 px-1.5 py-0.5 rounded ml-1">{2 - (activeBookings.find(b => b.id === rescheduleData.bookingId)?.reschedule_count || 0)}</span> ครั้ง
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                {/* Current Booking Summary */}
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex gap-4 items-center">
+                  <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center text-black shrink-0">
+                    <Scissors size={24} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider mb-0.5">คิวปัจจุบันของคุณ</p>
+                    <h4 className="text-white font-bold truncate">{rescheduleData.serviceName}</h4>
+                    <p className="text-zinc-400 text-xs font-num">
+                      {new Date(rescheduleData.currentDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })} • {rescheduleData.currentTime} น.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Date Selection */}
+                <div>
+                  {/* Date Display (Read-only: same-day only) */}
+                  <div>
+                    <label className="text-sm font-bold text-zinc-400 mb-3 block items-center gap-2">
+                      <Calendar size={16} /> วันที่ดำเนินการ (เลื่อนได้เฉพาะวันเดิม)
+                    </label>
+                    <div className="w-full bg-zinc-950/50 border border-white/5 rounded-2xl px-5 py-4 text-amber-500 font-num">
+                      {rescheduleData.date}
+                    </div>
+                    <p className="text-[10px] text-amber-500/50 mt-1.5">* ขณะนี้อนุญาตให้เลื่อนคิวได้เฉพาะภายในวันที่เลือกไว้เดิมเท่านั้นครับ</p>
+                  </div>
+                </div>
+
+                {/* Time Selection */}
+                {rescheduleData.date && (
+                  <div className="animate-[fadeIn_0.3s_ease-out]">
+                    <label className="text-sm font-bold text-zinc-400 mb-3 flex items-center gap-2">
+                      <Clock size={16} /> เลือกเวลาใหม่
+                    </label>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-62.5 overflow-y-auto pr-2 scrollbar-hide">
+                      {timeSlots.map(slot => {
+                        const isBooked = rescheduleBookedSlots.some(bTime => bTime && bTime.startsWith(slot));
+                        const isBusy = rescheduleAdminBusySlots.some(busy => {
+                          if (busy.is_full_day) return true;
+                          return slot >= busy.start_time.slice(0, 5) && slot <= busy.end_time.slice(0, 5);
+                        });
+                        const now = new Date();
+                        const todayStr = now.toLocaleDateString('en-CA');
+                        const [curH, curM] = [now.getHours(), now.getMinutes()];
+                        const [slotH, slotM] = slot.split(':').map(Number);
+                        const isPast = rescheduleData.date === todayStr && (slotH < curH || (slotH === curH && slotM <= curM));
+
+                        const isDisabled = isBooked || isBusy || isPast;
+
+                        return (
+                          <button
+                            key={slot}
+                            disabled={isDisabled}
+                            onClick={() => setRescheduleData({ ...rescheduleData, time: slot })}
+                            className={`py-2.5 rounded-xl text-sm font-num font-bold transition-all border ${rescheduleData.time === slot
+                              ? 'bg-amber-500 text-black border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)] scale-105 z-10'
+                              : isBusy
+                                ? 'bg-red-500/10 text-red-500 border-red-500/20 cursor-not-allowed opacity-40'
+                                : isBooked
+                                  ? 'bg-amber-500/10 text-amber-500/50 border-amber-500/20 cursor-not-allowed opacity-40'
+                                  : isPast
+                                    ? 'bg-zinc-900 text-zinc-600 border-white/5 cursor-not-allowed opacity-30'
+                                    : 'bg-zinc-800 text-zinc-300 border-white/5 hover:border-amber-500/50 hover:text-white'
+                              }`}
+                          >
+                            {isBusy ? 'ไม่ว่าง' : slot}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-zinc-500 mt-3">* พักตามรอบการบริการของร้าน</p>
+                  </div>
+                )}
+
+                {/* Footer Buttons */}
+                <div className="pt-4 flex gap-4">
+                  <button
+                    onClick={() => setShowRescheduleModal(false)}
+                    className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    disabled={!rescheduleData.time || rescheduleLoading}
+                    onClick={handleRescheduleSubmit}
+                    className="flex-1 py-4 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    {rescheduleLoading ? (
+                      <div className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin"></div>
+                    ) : (
+                      <>ยืนยันการเลื่อน</>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* --- Cancellation Modal --- */}
-      {showCancelModal && bookingToCancel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
-          <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl p-8 text-center animate-[slideUp_0.3s_ease-out]">
-            <div className="w-20 h-20 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Trash2 size={40} />
-            </div>
+      {
+        showCancelModal && bookingToCancel && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
+            <div className="bg-zinc-900 w-full max-w-sm rounded-3xl border border-white/10 shadow-2xl p-8 text-center animate-[slideUp_0.3s_ease-out]">
+              <div className="w-20 h-20 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Trash2 size={40} />
+              </div>
 
-            <h3 className="text-2xl font-serif font-bold text-white mb-2">ยืนยันการยกเลิก?</h3>
-            <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
-              คุณต้องการยกเลิกการจอง <span className="text-white font-bold">{bookingToCancel.service_name}</span><br />
-              ในวันที่ <span className="text-white font-num">{new Date(bookingToCancel.booking_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span> เวลา <span className="text-white font-num">{bookingToCancel.booking_time} น.</span> ใช่หรือไม่?
-            </p>
-
-            <div className="flex flex-col gap-3">
-              <button
-                disabled={cancelLoading}
-                onClick={confirmCancelBooking}
-                className="w-full py-4 bg-red-500 hover:bg-red-400 text-white rounded-2xl font-bold transition-all shadow-lg shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
-              >
-                {cancelLoading ? (
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <>ยืนยันการยกเลิก</>
-                )}
-              </button>
-              <button
-                disabled={cancelLoading}
-                onClick={() => setShowCancelModal(false)}
-                className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
-              >
-                ย้อนกลับ
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* --- Edit Booking Modal (Service & Promotion) --- */}
-      {showEditBookingModal && bookingToEdit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
-          <div className="bg-zinc-900 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out] max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-2xl font-serif font-bold text-white flex items-center gap-3">
-                <Edit2 className="text-blue-400" size={24} /> แก้ไขการจอง
-              </h3>
-              <button
-                onClick={() => setShowEditBookingModal(false)}
-                className="text-zinc-500 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="mb-6 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-              <AlertCircle size={14} className="text-blue-400" />
-              <p className="text-xs font-bold text-blue-400">
-                คุณเหลือสิทธิ์ในการแก้ไขอีก: <span className="text-white bg-blue-500 px-1.5 py-0.5 rounded ml-1">{2 - (bookingToEdit?.update_count || 0)}</span> ครั้ง
+              <h3 className="text-2xl font-serif font-bold text-white mb-2">ยืนยันการยกเลิก?</h3>
+              <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
+                คุณต้องการยกเลิกการจอง <span className="text-white font-bold">{bookingToCancel.service_name}</span><br />
+                ในวันที่ <span className="text-white font-num">{new Date(bookingToCancel.booking_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</span> เวลา <span className="text-white font-num">{bookingToCancel.booking_time} น.</span> ใช่หรือไม่?
               </p>
-            </div>
 
-            <div className="space-y-6">
-              {/* Current Status Header */}
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 flex gap-4 items-center">
-                <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-black shrink-0">
-                  <Scissors size={24} />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-0.5">คิวปัจจุบัน</p>
-                  <h4 className="text-white font-bold truncate">{bookingToEdit.service_name}</h4>
-                  <p className="text-zinc-400 text-xs font-num">{bookingToEdit.booking_date} • {bookingToEdit.booking_time} น.</p>
-                </div>
-              </div>
-
-              {/* Service Selection */}
-              <div>
-                <label className="text-sm font-bold text-zinc-400 mb-3 block">เลือกทรงผมใหม่</label>
-                {fetchDataLoading ? (
-                  <div className="py-4 text-center text-zinc-500 text-sm">กำลังโหลดรายการบริการ...</div>
-                ) : (
-                  <select
-                    value={editBookingForm.serviceName}
-                    onChange={(e) => setEditBookingForm({ ...editBookingForm, serviceName: e.target.value })}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-blue-500 outline-none transition-all"
-                  >
-                    {availableServices.map(s => (
-                      <option key={s.id} value={s.name}>{s.name} (฿{s.price})</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* Promotion Selection (Dropdown) */}
-              <div>
-                <label className="text-sm font-bold text-zinc-400 mb-3 block">โปรโมชั่น (ส่วนลด)</label>
-                {fetchDataLoading ? (
-                  <div className="py-4 text-center text-zinc-500 text-sm">กำลังโหลดโปรโมชั่น...</div>
-                ) : (
-                  <select
-                    value={editBookingForm.promoCode}
-                    onChange={(e) => setEditBookingForm({ ...editBookingForm, promoCode: e.target.value })}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-blue-500 outline-none transition-all font-num"
-                  >
-                    <option value="">ไม่ใช้โปรโมชั่น</option>
-                    {availablePromotions.map(p => (
-                      <option key={p.id} value={p.code}>
-                        {p.code} ({p.discount_text})
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <p className="text-[10px] text-zinc-500 mt-1.5">* เลือกโปรโมชั่นที่ต้องการนำมาใช้กับทรงผมนี้</p>
-              </div>
-
-              {/* Price Summary */}
-              <div className="pt-4 border-t border-white/5 flex justify-between items-center">
-                <span className="text-zinc-400 font-bold">ราคาใหม่ที่ต้องชำระ:</span>
-                <span className="text-2xl font-bold font-num text-white">฿{editBookingForm.price}</span>
-              </div>
-
-              <div className="pt-4 flex gap-4">
+              <div className="flex flex-col gap-3">
                 <button
-                  onClick={() => setShowEditBookingModal(false)}
-                  className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
+                  disabled={cancelLoading}
+                  onClick={confirmCancelBooking}
+                  className="w-full py-4 bg-red-500 hover:bg-red-400 text-white rounded-2xl font-bold transition-all shadow-lg shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
                 >
-                  ยกเลิก
-                </button>
-                <button
-                  disabled={editBookingLoading || fetchDataLoading}
-                  onClick={handleUpdateBookingSubmit}
-                  className="flex-1 py-4 bg-blue-500 hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-2"
-                >
-                  {editBookingLoading ? (
+                  {cancelLoading ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                   ) : (
-                    <>บันทึกการแก้ไข</>
+                    <>ยืนยันการยกเลิก</>
                   )}
+                </button>
+                <button
+                  disabled={cancelLoading}
+                  onClick={() => setShowCancelModal(false)}
+                  className="w-full py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
+                >
+                  ย้อนกลับ
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
+      {/* --- Edit Booking Modal (Service & Promotion) --- */}
+      {
+        showEditBookingModal && bookingToEdit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-[fadeIn_0.2s_ease-out]">
+            <div className="bg-zinc-900 w-full max-w-md rounded-3xl border border-white/10 shadow-2xl p-6 md:p-8 animate-[slideUp_0.3s_ease-out] max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-2xl font-serif font-bold text-white flex items-center gap-3">
+                  <Edit2 className="text-blue-400" size={24} /> แก้ไขการจอง
+                </h3>
+                <button
+                  onClick={() => setShowEditBookingModal(false)}
+                  className="text-zinc-500 hover:text-white transition-colors p-2 hover:bg-white/5 rounded-full"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="mb-6 flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                <AlertCircle size={14} className="text-blue-400" />
+                <p className="text-xs font-bold text-blue-400">
+                  คุณเหลือสิทธิ์ในการแก้ไขอีก: <span className="text-white bg-blue-500 px-1.5 py-0.5 rounded ml-1">{2 - (bookingToEdit?.update_count || 0)}</span> ครั้ง
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                {/* Current Status Header */}
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 flex gap-4 items-center">
+                  <div className="w-12 h-12 bg-blue-500 rounded-xl flex items-center justify-center text-black shrink-0">
+                    <Scissors size={24} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mb-0.5">คิวปัจจุบัน</p>
+                    <h4 className="text-white font-bold truncate">{bookingToEdit.service_name}</h4>
+                    <p className="text-zinc-400 text-xs font-num">{bookingToEdit.booking_date?.split('-').reverse().join('-')} • {bookingToEdit.booking_time} น.</p>
+                  </div>
+                </div>
+
+                {/* Service Selection */}
+                <div>
+                  <label className="text-sm font-bold text-zinc-400 mb-3 block">เลือกทรงผมใหม่</label>
+                  {fetchDataLoading ? (
+                    <div className="py-4 text-center text-zinc-500 text-sm">กำลังโหลดรายการบริการ...</div>
+                  ) : (
+                    <select
+                      value={editBookingForm.serviceName}
+                      onChange={(e) => setEditBookingForm({ ...editBookingForm, serviceName: e.target.value })}
+                      className="w-full bg-zinc-950 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-blue-500 outline-none transition-all"
+                    >
+                      {availableServices.map(s => (
+                        <option key={s.id} value={s.name}>{s.name} (฿{s.price})</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {/* Promotion Selection (Dropdown) */}
+                <div>
+                  <label className="text-sm font-bold text-zinc-400 mb-3 block">โปรโมชั่น (ส่วนลด)</label>
+                  {fetchDataLoading ? (
+                    <div className="py-4 text-center text-zinc-500 text-sm">กำลังโหลดโปรโมชั่น...</div>
+                  ) : (
+                    <select
+                      value={editBookingForm.promoCode}
+                      onChange={(e) => setEditBookingForm({ ...editBookingForm, promoCode: e.target.value })}
+                      className="w-full bg-zinc-950 border border-white/10 rounded-2xl px-5 py-4 text-white focus:border-blue-500 outline-none transition-all font-num"
+                    >
+                      <option value="">ไม่ใช้โปรโมชั่น</option>
+                      {availablePromotions.map(p => (
+                        <option key={p.id} value={p.code}>
+                          {p.code} ({p.discount_text})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <p className="text-[10px] text-zinc-500 mt-1.5">* เลือกโปรโมชั่นที่ต้องการนำมาใช้กับทรงผมนี้</p>
+                </div>
+
+                {/* Price Summary */}
+                <div className="pt-4 border-t border-white/5 flex justify-between items-center">
+                  <span className="text-zinc-400 font-bold">ราคาใหม่ที่ต้องชำระ:</span>
+                  <span className="text-2xl font-bold font-num text-white">฿{editBookingForm.price}</span>
+                </div>
+
+                <div className="pt-4 flex gap-4">
+                  <button
+                    onClick={() => setShowEditBookingModal(false)}
+                    className="flex-1 py-4 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-2xl font-bold transition-all active:scale-95"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    disabled={editBookingLoading || fetchDataLoading}
+                    onClick={handleUpdateBookingSubmit}
+                    className="flex-1 py-4 bg-blue-500 hover:bg-blue-400 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    {editBookingLoading ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      <>บันทึกการแก้ไข</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      }
 
       {/* --- Edit Booking Success Modal --- */}
-      {showEditSuccessModal && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl animate-[fadeIn_0.3s_ease-out]">
-          <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] border border-white/10 shadow-2xl p-10 text-center animate-[slideUp_0.4s_ease-out] relative overflow-hidden">
-            {/* Background decoration */}
-            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
-            <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
+      {
+        showEditSuccessModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl animate-[fadeIn_0.3s_ease-out]">
+            <div className="bg-zinc-900 w-full max-w-sm rounded-[2.5rem] border border-white/10 shadow-2xl p-10 text-center animate-[slideUp_0.4s_ease-out] relative overflow-hidden">
+              {/* Background decoration */}
+              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
+              <div className="absolute -top-24 -right-24 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl"></div>
 
-            <div className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg shadow-blue-500/20 relative">
-              <div className="absolute inset-0 rounded-full animate-ping bg-blue-500/30"></div>
-              <CheckCircle className="text-white relative z-10" size={48} />
+              <div className="w-24 h-24 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg shadow-blue-500/20 relative">
+                <div className="absolute inset-0 rounded-full animate-ping bg-blue-500/30"></div>
+                <CheckCircle className="text-white relative z-10" size={48} />
+              </div>
+
+              <h3 className="text-3xl font-serif font-bold text-white mb-3">แก้ไขสำเร็จ!</h3>
+              <p className="text-zinc-400 text-sm mb-10 leading-relaxed px-2">
+                เราได้อัปเดตรายละเอียดการจองของคุณเรียบร้อยแล้ว<br />
+                ตรวจสอบข้อมูลใหม่ได้ที่หน้ารายการครับ
+              </p>
+
+              <button
+                onClick={() => setShowEditSuccessModal(false)}
+                className="w-full py-4 bg-white text-black hover:bg-zinc-200 rounded-2xl font-bold transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
+              >
+                ตกลง
+              </button>
             </div>
-
-            <h3 className="text-3xl font-serif font-bold text-white mb-3">แก้ไขสำเร็จ!</h3>
-            <p className="text-zinc-400 text-sm mb-10 leading-relaxed px-2">
-              เราได้อัปเดตรายละเอียดการจองของคุณเรียบร้อยแล้ว<br />
-              ตรวจสอบข้อมูลใหม่ได้ที่หน้ารายการครับ
-            </p>
-
-            <button
-              onClick={() => setShowEditSuccessModal(false)}
-              className="w-full py-4 bg-white text-black hover:bg-zinc-200 rounded-2xl font-bold transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2"
-            >
-              ตกลง
-            </button>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }

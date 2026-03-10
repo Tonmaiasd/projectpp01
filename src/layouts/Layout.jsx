@@ -6,8 +6,8 @@ export default function Layout() {
   const navigate = useNavigate();
 
   return (
-    // เปลี่ยนพื้นหลังหลักเป็นสีเข้ม (zinc-950)
-    <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100 font-sans">
+    // เปลี่ยนพื้นหลังหลักเป็นสีเข้ม (zinc-950) และเพิ่มป้องกันหน้าจอล้นขอบ
+    <div className="min-h-screen flex flex-col bg-zinc-950 text-zinc-100 font-sans overflow-x-hidden w-full max-w-[100vw]">
 
       {/* Global Font Styles for the layout */}
       <style>{`

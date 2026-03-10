@@ -279,13 +279,16 @@ export default function Promotions() {
               <div className="flex flex-row sm:flex-col justify-between items-end gap-3 z-10 border-t sm:border-t-0 sm:border-l border-white/5 pt-4 sm:pt-0 sm:pl-4 mt-2 sm:mt-0">
 
                 {/* Toggle Switch */}
-                <button
-                  onClick={() => handleToggleActive(promo.id, promo.active, promo.expire_date)}
-                  title={promo.active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
-                  className={`text-3xl transition-transform hover:scale-110 active:scale-95 ${promo.active ? 'text-green-500 hover:text-green-400' : 'text-zinc-600 hover:text-zinc-500'}`}
-                >
-                  {promo.active ? <ToggleRight size={36} /> : <ToggleLeft size={36} />}
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400 font-medium whitespace-nowrap">เปิด/ปิด ใช้งานโปรโมชั่น</span>
+                  <button
+                    onClick={() => handleToggleActive(promo.id, promo.active, promo.expire_date)}
+                    title={promo.active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                    className={`text-3xl transition-transform hover:scale-110 active:scale-95 ${promo.active ? 'text-green-500 hover:text-green-400' : 'text-zinc-600 hover:text-zinc-500'}`}
+                  >
+                    {promo.active ? <ToggleRight size={36} /> : <ToggleLeft size={36} />}
+                  </button>
+                </div>
 
                 <div className="flex gap-2">
                   <button

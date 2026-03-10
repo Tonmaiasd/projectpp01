@@ -78,7 +78,7 @@ export default function AdminComments() {
         console.error('Delete error details:', error);
         return;
       }
-      
+
       fetchComments();
       setDeleteId(null);
     } catch (err) {
@@ -88,7 +88,7 @@ export default function AdminComments() {
 
   const filteredComments = comments.filter(comment => {
     const matchesFilter = filterStar === 0 || comment.rating === filterStar;
-    const matchesSearch = 
+    const matchesSearch =
       comment.user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       comment.content.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesFilter && matchesSearch;
@@ -168,11 +168,10 @@ export default function AdminComments() {
               <Filter size={20} className="text-zinc-400" />
               <button
                 onClick={() => setFilterStar(0)}
-                className={`px-4 py-2 rounded-lg border transition-all ${
-                  filterStar === 0
+                className={`px-4 py-2 rounded-lg border transition-all ${filterStar === 0
                     ? 'bg-amber-500 text-black border-amber-500 font-bold'
                     : 'border-white/10 text-zinc-400 hover:border-white/30'
-                }`}
+                  }`}
               >
                 ทั้งหมด
               </button>
@@ -180,11 +179,10 @@ export default function AdminComments() {
                 <button
                   key={s}
                   onClick={() => setFilterStar(s)}
-                  className={`px-3 py-2 rounded-lg border transition-all flex items-center gap-1 ${
-                    filterStar === s
+                  className={`px-3 py-2 rounded-lg border transition-all flex items-center gap-1 ${filterStar === s
                       ? 'bg-amber-500 text-black border-amber-500 font-bold'
                       : 'border-white/10 text-zinc-400 hover:border-white/30'
-                  }`}
+                    }`}
                 >
                   {s} <Star size={14} className={filterStar === s ? 'fill-black' : 'fill-zinc-400'} />
                 </button>
@@ -246,7 +244,7 @@ export default function AdminComments() {
                   {/* Delete Button */}
                   <button
                     onClick={() => setDeleteId(comment.id)}
-                    className="ml-4 p-3 bg-red-600/10 text-red-500 rounded-lg hover:bg-red-600 hover:text-white transition-all opacity-0 group-hover:opacity-100"
+                    className="ml-4 shrink-0 p-3 bg-red-600/10 text-red-500 rounded-lg hover:bg-red-600 hover:text-white transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                     title="ลบรีวิวนี้"
                   >
                     <Trash2 size={18} />

@@ -54,7 +54,6 @@ export default function UsersPage() {
     setFormData({
       full_name: user.full_name || '',
       phone: user.phone || '',
-      address: user.address || '',
     });
   };
 
@@ -79,8 +78,7 @@ export default function UsersPage() {
         body: JSON.stringify({
           userId: editingUser.id,
           phone: phone,
-          full_name: formData.full_name,
-          address: formData.address
+          full_name: formData.full_name
         }),
       });
 
@@ -123,8 +121,7 @@ export default function UsersPage() {
   // Filter Users
   const filteredUsers = users.filter(user =>
     (user.full_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (user.phone || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (user.address || '').toLowerCase().includes(searchTerm.toLowerCase())
+    (user.phone || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Pagination for users
@@ -155,7 +152,7 @@ export default function UsersPage() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 w-5 h-5" />
           <input
             type="text"
-            placeholder="ค้นหาสมาชิกด้วยชื่อ / เบอร์ / ที่อยู่..."
+            placeholder="ค้นหาสมาชิกด้วยชื่อ / เบอร์..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full bg-zinc-950 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-white focus:border-amber-500 outline-none transition-all"
@@ -178,7 +175,6 @@ export default function UsersPage() {
               <tr>
                 <th className="px-6 py-4 font-medium">User</th>
                 <th className="px-6 py-4 font-medium">Contact</th>
-                <th className="px-6 py-4 font-medium">Address</th>
                 <th className="px-6 py-4 font-medium">Updated</th>
                 <th className="px-6 py-4 font-medium text-right">Actions</th>
               </tr>
@@ -207,10 +203,9 @@ export default function UsersPage() {
                       <span className="flex items-center gap-2 text-xs font-num"><Phone size={12} /> {user.phone || '-'}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-zinc-300">{user.address || '-'}</td>
                   <td className="px-6 py-4 font-num text-zinc-400">{user.updated_at ? new Date(user.updated_at).toLocaleString('th-TH') : '-'}</td>
                   <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => handleEditClick(user)}
                         title="แก้ไขข้อมูล"
@@ -276,15 +271,6 @@ export default function UsersPage() {
                     setFormData({ ...formData, phone: sanitizePhone(paste) });
                   }}
                   className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-zinc-400 mb-1 block">ที่อยู่</label>
-                <textarea
-                  value={formData.address}
-                  onChange={e => setFormData({ ...formData, address: e.target.value })}
-                  rows="3"
-                  className="w-full bg-zinc-950 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-amber-500 outline-none resize-none"
                 />
               </div>
             </div>

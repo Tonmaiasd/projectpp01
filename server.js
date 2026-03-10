@@ -490,10 +490,15 @@ app.post('/api/delete-holiday', async (req, res) => {
 
   try {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { error } = await supabaseAdmin
-      .from('admin_busy_times')
-      .delete()
-      .eq('id', id);
+    let query = supabaseAdmin.from('admin_busy_times').delete();
+
+    if (Array.isArray(id)) {
+      query = query.in('id', id);
+    } else {
+      query = query.eq('id', id);
+    }
+
+    const { error } = await query;
 
     if (error) throw error;
     res.json({ success: true, message: 'ลบรายการเรียบร้อยแล้ว' });
