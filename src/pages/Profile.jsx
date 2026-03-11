@@ -772,30 +772,29 @@ export default function Profile() {
     const statusInfo = getStatusDisplay(booking.status);
     return (
       <div key={booking.id} className="bg-zinc-950/50 p-6 rounded-2xl border border-white/5 hover:border-amber-500/30 transition-all group flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-start gap-4">
+        <div className="flex items-start gap-4 w-full md:w-auto min-w-0">
           <div className="w-14 h-14 bg-zinc-800 rounded-xl flex items-center justify-center text-zinc-400 group-hover:text-amber-500 transition-colors shrink-0">
             <Scissors size={24} />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <h4 className="font-bold text-lg text-white group-hover:text-amber-500 transition-colors">{booking.service_name}</h4>
-              <span className="text-xs text-zinc-500 font-num">#{booking.id}</span>
+              <h4 className="font-bold text-lg text-white group-hover:text-amber-500 transition-colors truncate">{booking.service_name}</h4>
+              <span className="text-xs text-zinc-500 font-num shrink-0">#{booking.id}</span>
             </div>
-            <p className="text-zinc-400 text-sm mb-2">โดยช่าง: <span className="text-white">{booking.barber_name}</span></p>
             <div className="flex flex-wrap items-center gap-3 text-xs text-zinc-500">
-              <span className="flex items-center gap-1 font-num bg-zinc-900 px-2 py-1 rounded border border-white/5"><Calendar size={12} /> {booking.booking_date?.split('-').reverse().join('-')}</span>
-              <span className="flex items-center gap-1 font-num bg-zinc-900 px-2 py-1 rounded border border-white/5"><Clock size={12} /> {booking.booking_time} น.</span>
+              <span className="flex items-center gap-1 font-num bg-zinc-900 px-2 py-1 rounded border border-white/5 shrink-0"><Calendar size={12} /> {booking.booking_date?.split('-').reverse().join('-')}</span>
+              <span className="flex items-center gap-1 font-num bg-zinc-900 px-2 py-1 rounded border border-white/5 shrink-0"><Clock size={12} /> {booking.booking_time} น.</span>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col items-start md:items-end gap-3 w-full md:w-auto mt-4 md:mt-0">
-          <div className="flex items-center gap-2">
-            <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center gap-1.5 ${statusInfo.color}`}>
-              {statusInfo.icon}
-              {statusInfo.text}
+        <div className="flex flex-col items-start md:items-end gap-3 w-full md:w-auto mt-4 md:mt-0 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 max-w-full">
+            <span className={`px-3 py-1.5 rounded-lg text-xs font-bold border flex items-center gap-1.5 min-w-0 ${statusInfo.color}`}>
+              <div className="shrink-0">{statusInfo.icon}</div>
+              <span className="truncate">{statusInfo.text}</span>
             </span>
-            <span className="text-xl font-bold font-num text-white">฿{booking.price}</span>
+            <span className="text-xl font-bold font-num text-white shrink-0">฿{booking.price}</span>
           </div>
 
           {/* ปุ่มจัดการคิว เฉพาะสถานะ Pending */}
