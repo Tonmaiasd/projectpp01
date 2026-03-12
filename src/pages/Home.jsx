@@ -230,7 +230,7 @@ export default function Home() {
                 ดูบริการของเรา
               </button>
               <a href="#contact" className="px-10 py-5 text-lg border-2 border-amber-500/50 text-white font-bold tracking-widest hover:bg-amber-500/10 hover:border-amber-500 transition-all flex items-center justify-center gap-3 group rounded-lg">
-                ติดต่อจองคิว Walk-in <ChevronRight size={20} className="group-hover:translate-x-2 transition-transform" />
+                location <ChevronRight size={20} className="group-hover:translate-x-2 transition-transform" />
               </a>
             </div>
           </div>
